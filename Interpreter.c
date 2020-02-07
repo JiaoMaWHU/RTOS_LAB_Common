@@ -39,10 +39,12 @@ void OutCRLF(void){
 // Input: none
 // Output: none
 void Output_Help(){
-	UART_OutString("** Use , to separate, don't enter extra spaces in cmd **"); OutCRLF(); OutCRLF();
+	UART_OutString("==== Use , to separate, don't enter extra spaces in cmd ===="); OutCRLF(); OutCRLF();
 	UART_OutString("lcd_t,[1],[2],[3]: output string [2] and value [3] to no.[1] line at the top side of the lcd"); OutCRLF(); OutCRLF();
 	UART_OutString("lcd_b,[1],[2],[3]: output string [2] and value [3] to no.[1] line at the bottom side of the lcd"); OutCRLF(); OutCRLF();
-	UART_OutString("adc,[1]: initilize adc with channel number [1]"); OutCRLF(); OutCRLF();
+	UART_OutString("lcd_clr: clear the LCD"); OutCRLF(); OutCRLF();
+	UART_OutString("adc_init,[1]: initilize adc with channel number [1]"); OutCRLF(); OutCRLF();
+	UART_OutString("adc_get: output the value of adc"); OutCRLF(); OutCRLF();
 	UART_OutString("clr_ms: clear the time counter and start counting"); OutCRLF(); OutCRLF();
 	UART_OutString("get_ms: output the time counter"); OutCRLF(); OutCRLF();
 }
@@ -77,7 +79,7 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		Output_Help();
 	}else if(!strcmp("lcd_t", cmd[0]) || !strcmp("lcd_b", cmd[0])){
 		Call_LCD(cmd);
-	}else if(!strcmp("adc", cmd[0])){
+	}else if(!strcmp("adc_init", cmd[0])){
 		int16_t res = -1;
 		if(cmd[1]!=NULL){
 			res = ADC_Init((uint32_t)atoi(cmd[1]));
@@ -87,6 +89,11 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		}else{
 			UART_OutString("ADC initilized unsuccessfully"); OutCRLF();
 		}
+	}else if(!strcmp("lcd_clr", cmd[0])){
+		ST7735_FillRect(0, 0, 21*6, 16*10, ST7735_BLACK);
+	}else if(!strcmp("adc_get", cmd[0])){
+		UART_OutString("ADC value: "); 
+		UART_OutUDec(ADC_In()); OutCRLF();
 	}else if(!strcmp("clr_ms", cmd[0])){
 		OS_ClearMsTime();
 		UART_OutString("Cleared"); OutCRLF();
