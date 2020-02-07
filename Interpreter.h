@@ -11,9 +11,7 @@
 
  ******************************************************************************/
 
-
-
-
+#include <stdint.h> 
 
 /**
  * @details  Run the user interface.
@@ -29,3 +27,20 @@ void Interpreter(void);
 // Output: none
 void OutCRLF(void);
 
+//---------------------CMD Parser---------------------
+// Parse the string to specific command and execute it
+// Input: string
+// Output: none
+void CMD_Parser(char *cmd_buffer_, uint16_t length);
+
+//---------------------Output help instructions---------------------
+// Output help instructions
+// Input: none
+// Output: none
+void Output_Help(void);
+
+//---------------------Call lcd function---------------------
+// Output help instructions
+// Input: cmd arrays
+// Output: none
+void Call_LCD(const char *cmd[]);
