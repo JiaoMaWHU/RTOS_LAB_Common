@@ -393,7 +393,7 @@ void OS_ClearMsTime(void){
   // put Lab 1 solution here
 	ElapsedTimerCounter = 0;
 	uint32_t F1000HZ = (80000000/1000);
-	Timer5A_Init(&OS_CounterIncrement, F1000HZ, 2);  // initialize timer4A (100 Hz)
+	Timer5A_Init(&OS_CounterIncrement, F1000HZ, 2);  // initialize timer5A (100 Hz)
   //EnableInterrupts();
 };
 

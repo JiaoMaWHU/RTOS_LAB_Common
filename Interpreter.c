@@ -38,7 +38,7 @@ void OutCRLF(void){
 // Output help instructions
 // Input: none
 // Output: none
-void Output_Help(){
+void Output_Help(void){
 	UART_OutString("==== Use , to separate, don't enter extra spaces in cmd ===="); OutCRLF(); OutCRLF();
 	UART_OutString("lcd_t,[1],[2],[3]: output string [2] and value [3] to no.[1] line at the top side of the lcd"); OutCRLF(); OutCRLF();
 	UART_OutString("lcd_b,[1],[2],[3]: output string [2] and value [3] to no.[1] line at the bottom side of the lcd"); OutCRLF(); OutCRLF();
