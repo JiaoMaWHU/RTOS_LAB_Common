@@ -1412,7 +1412,7 @@ void ST7735_Message(uint32_t  d, uint32_t  l, char *pt, int32_t value){
 	uint16_t row = l*size + (d*8); // y
 	if(value<0){
 		// if the value is less than 0, we need to print a minus sign at first
-		ST7735_DrawChar((int16_t)col, (int16_t)row, '-', ST7735_WHITE, ST7735_BLACK, size);
+		ST7735_DrawChar((int16_t)col*6, (int16_t)row*6, '-', ST7735_WHITE, ST7735_BLACK, size);
 		col += size;
 	}
 	ST7735_SetCursor((uint32_t)col, (uint32_t)row);
