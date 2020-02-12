@@ -73,9 +73,9 @@
 // CS   - PA3 TFT_CS, active low to enable TFT
 // *CS  - (NC) SDC_CS, active low to enable SDC
 // MISO - (NC) MISO SPI data from SDC to microcontroller
-// SDA  – (NC) I2C data for ADXL345 accelerometer
-// SCL  – (NC) I2C clock for ADXL345 accelerometer
-// SDO  – (NC) I2C alternate address for ADXL345 accelerometer
+// SDA  ï¿½ (NC) I2C data for ADXL345 accelerometer
+// SCL  ï¿½ (NC) I2C clock for ADXL345 accelerometer
+// SDO  ï¿½ (NC) I2C alternate address for ADXL345 accelerometer
 // Backlight + - Light, backlight connected to +3.3 V
 
 // **********wide.hk ST7735R with ADXL335 accelerometer *******************
@@ -89,9 +89,9 @@
 // CS   - PA3 TFT_CS, active low to enable TFT
 // *CS  - (NC) SDC_CS, active low to enable SDC
 // MISO - (NC) MISO SPI data from SDC to microcontroller
-// X– (NC) analog input X-axis from ADXL335 accelerometer
-// Y– (NC) analog input Y-axis from ADXL335 accelerometer
-// Z– (NC) analog input Z-axis from ADXL335 accelerometer
+// Xï¿½ (NC) analog input X-axis from ADXL335 accelerometer
+// Yï¿½ (NC) analog input Y-axis from ADXL335 accelerometer
+// Zï¿½ (NC) analog input Z-axis from ADXL335 accelerometer
 // Backlight + - Light, backlight connected to +3.3 V
 
 // **********HiLetgo ST7735 TFT and SDC (SDC not tested)*******************
@@ -113,6 +113,8 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #include "../inc/tm4c123gh6pm.h"
 #include "../RTOS_Labs_common/ST7735.h"
 #include "../RTOS_Labs_common/OS.h"
@@ -1410,19 +1412,19 @@ void ST7735_Message(uint32_t  d, uint32_t  l, char *pt, int32_t value){
 	uint16_t size = 1;
 	uint16_t col = 0; // x
 	uint16_t row = l*size + (d*8); // y
-	if(value<0){
-		// if the value is less than 0, we need to print a minus sign at first
-		ST7735_DrawChar((int16_t)col*6, (int16_t)row*6, '-', ST7735_WHITE, ST7735_BLACK, size);
-		col += size;
+	ST7735_FillRect(col*6, (int16_t)row*10, 21*6, 10, ST7735_BLACK); // clear this line
+	if(pt==NULL){
+		return;
 	}
-	ST7735_SetCursor((uint32_t)col, (uint32_t)row);
-	ST7735_SetTextColor(ST7735_WHITE);
-	ST7735_OutUDec4((uint32_t)abs(value));
-	col += 4;
-	ST7735_DrawChar((int16_t)col, (int16_t)row, ' ', ST7735_WHITE, ST7735_BLACK, size);
-	col += size;
-	ST7735_DrawString(col, row, pt, ST7735_WHITE);
+	char print_str[128];
+	memset(print_str, 0, sizeof(print_str));
+	sprintf(print_str, "%d", value);
+	strcat(print_str, ", ");
+	strcat(print_str, pt);
+	ST7735_DrawString(col, row, print_str, ST7735_WHITE);
 }
+
+
 
 //-----------------------ST7735_OutUDec4-----------------------
 // Output a 32-bit number in unsigned 4-digit decimal format
