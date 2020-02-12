@@ -15,6 +15,8 @@
         EXPORT  StartOS
         EXPORT  ContextSwitch
         EXPORT  PendSV_Handler
+		EXPORT  OS_DisableInterrupts
+        EXPORT  OS_EnableInterrupts
 
 
 NVIC_INT_CTRL   EQU     0xE000ED04                              ; Interrupt control state register.
@@ -24,11 +26,27 @@ NVIC_LEVEL14    EQU           0xEF                              ; Systick priori
 NVIC_LEVEL15    EQU           0xFF                              ; PendSV priority value (lowest).
 NVIC_PENDSVSET  EQU     0x10000000                              ; Value to trigger PendSV exception.
 
+OS_DisableInterrupts
+        CPSID   I
+        BX      LR
+
+
+OS_EnableInterrupts
+        CPSIE   I
+        BX      LR
 
 StartOS
 ; put your code here
-    
-    
+	LDR     R0, =RunPt         ; currently running thread
+    LDR     R2, [R0]           ; R2 = value of RunPt
+    LDR     SP, [R2]           ; new thread SP; SP = RunPt->stackPointer;
+    POP     {R4-R11}           ; restore regs r4-11
+    POP     {R0-R3}            ; restore regs r0-3
+    POP     {R12}
+    POP     {LR}               ; discard LR from initial stack
+    POP     {LR}               ; start location
+    POP     {R1}               ; discard PSR
+    CPSIE   I                  ; Enable interrupts at processor level
     BX      LR                 ; start first thread
 
 OSStartHang

@@ -22,6 +22,12 @@
 #include "../RTOS_Labs_common/UART0int.h"
 #include "../RTOS_Labs_common/eFile.h"
 
+// function definitions in osasm.s
+void OS_DisableInterrupts(void); // Disable interrupts
+void OS_EnableInterrupts(void);  // Enable interrupts
+void StartOS(void);
+void ContextSwitch(void);
+void StartOS(void);
 
 // Performance Measurements 
 int32_t MaxJitter;             // largest time jitter between interrupts in usec
@@ -41,13 +47,13 @@ struct tcb{
 	uint32_t priority;	 // the priority of the current thread (lab 3)
 	uint32_t blockedState;  // current state of the thread
 };
+
 typedef struct tcb tcbType; // meaning replace "struct tcb" with tcbType
 tcbType tcbs[NUMTHREAD];
 tcbType *RunPt;
+
 int32_t Stacks[NUMTHREAD][STACKSIZE];
 int32_t THREAD_ID = 0;	// THREAD_ID assign to threads
-
-
 
 /*------------------------------------------------------------------------------
   Systick Interrupt Handler
@@ -55,8 +61,7 @@ int32_t THREAD_ID = 0;	// THREAD_ID assign to threads
   used for preemptive thread switch
  *------------------------------------------------------------------------------*/
 void SysTick_Handler(void) {
-  
-  
+	ContextSwitch();
 } // end SysTick_Handler
 
 unsigned long OS_LockScheduler(void){
@@ -82,7 +87,8 @@ void SysTick_Init(unsigned long period){
  */
 void OS_Init(void){
   // put Lab 2 (and beyond) solution here
-
+	OS_DisableInterrupts();
+	PLL_Init(Bus50MHz);         // set processor clock to 50 MHz
 }; 
 
 // ******** OS_InitSemaphore ************
@@ -176,24 +182,26 @@ void OS_RunPtrScheduler(void){
 // stack size must be divisable by 8 (aligned to double word boundary)
 // In Lab 2, you can ignore both the stackSize and priority fields
 // In Lab 3, you can ignore the stackSize fields
-int OS_AddThread(void(*task)(void), 
-   uint32_t stackSize, uint32_t priority){
-	int32_t status; 
+int OS_AddThread(void(*task)(void), uint32_t stackSize, 
+					uint32_t priority){
+	uint32_t status; 
   // put Lab 2 (and beyond) solution here
 	status = StartCritical();
-	if (RunPt) {
+	if (!RunPt) {
 		tcbs[THREAD_ID].next = &tcbs[THREAD_ID]; // set first node pointing to itself
-		RunPt = &tcbs[0]; 											 // initiate first task
+		RunPt = &tcbs[THREAD_ID]; 							// initiate first task
 	} else {
 		tcbType* orginNext = RunPt -> next;	// store the origin next node
 		RunPt -> next = &tcbs[THREAD_ID]; 	// current node.next point to new node
 		tcbs[THREAD_ID].next = orginNext; 	// new node.next points to origin next
+		orginNext = NULL; // clear tmp pointer
 	}
 	
 	tcbs[THREAD_ID].id = THREAD_ID;			  // set the id field of the node
 	tcbs[THREAD_ID].priority = priority;  // set the priority field of the node
 	
-	OS_SetInitialStack(THREAD_ID); Stacks[THREAD_ID][STACKSIZE-2] = (int32_t)(task); // PC
+	OS_SetInitialStack(THREAD_ID); 
+	Stacks[THREAD_ID][STACKSIZE-2] = (int32_t)(task); // PC
 	THREAD_ID++;	// increment thread id for future new threads
 	
   EndCritical(status);   
@@ -318,8 +326,7 @@ void OS_Kill(void){
 // output: none
 void OS_Suspend(void){
   // put Lab 2 (and beyond) solution here
-  
-
+  ContextSwitch();
 };
   
 // ******** OS_Fifo_Init ************
@@ -483,8 +490,7 @@ uint32_t OS_MsTime(void){
 // It is ok to limit the range of theTimeSlice to match the 24-bit SysTick
 void OS_Launch(uint32_t theTimeSlice){
   // put Lab 2 (and beyond) solution here
-  
-    
+	StartOS(); // start on the first task
 };
 
 //******** I/O Redirection *************** 
