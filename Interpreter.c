@@ -34,6 +34,103 @@ void OutCRLF(void){
   UART_OutChar(LF);
 }
 
+<<<<<<< HEAD
+
+void CMD_Identifier(char **cmd) {
+	uint32_t line = 0;
+	int32_t value = 0;
+	if (strcmp(cmd[0], "lcd_top") == 0) {
+			line = atoi(cmd[1]);
+			value = atoi(cmd[3]); 
+		  ST7735_Message(0, line, cmd[2], value);
+	} else if (strcmp(cmd[0], "lcd_down") == 0) {
+			line = atoi(cmd[1]);
+			value = atoi(cmd[3]); 
+		  ST7735_Message(1, line, cmd[2], value);
+	}
+	OutCRLF();
+	UART_OutString("Done"); 
+	OutCRLF();
+}
+
+void CMD_Parse(char* inputBuffer) {
+	char *p = strtok(inputBuffer, ",");
+	char *cmd[4];
+	
+	uint32_t i = 0;
+	
+	while (p != NULL && i < 4) {
+		cmd[i++] = p;
+		p = strtok(NULL, ",");
+	}
+  CMD_Identifier(cmd);
+}
+
+// *********** Command line interpreter (shell) ************
+void Interpreter(void){
+	uint32_t BUFFERSIZE = 128;
+	char inputBuffer[BUFFERSIZE];
+	memset(&inputBuffer[0],0, BUFFERSIZE);
+	
+	UART_OutString("Welcome!");  OutCRLF();
+	
+	while (1) {
+		UART_OutChar('>');
+		UART_InString(inputBuffer,19);
+		CMD_Parse(inputBuffer);
+		memset(&inputBuffer[0],0, BUFFERSIZE);
+		OutCRLF();
+	}
+	
+	
+  // write this  
+//	char i;
+//  char string[20];  // global to assist in debugging
+//  uint32_t n;
+//	
+//	
+//  UART_OutChar('-');
+//  UART_OutChar('-');
+
+//  while(1){
+//    UART_OutString("InString: ");
+//    UART_InString(string,19);
+//    UART_OutString(" OutString="); 
+//		if (strcmp(string,"help") == 0) {
+//			UART_OutString("Welcome to Help"); 
+//			ST7735_OutString("Welcome to Help");
+//		} else {
+//			UART_OutString(string);
+//		}
+
+//		if (strcmp(string,"clear") == 0) {
+//			ST7735_FillScreen(ST7735_BLACK);
+//		}
+//		
+//		
+//		OutCRLF();
+		
+//		uint32_t upDown;
+//		uint32_t line;
+//		int32_t value;
+
+//    UART_OutString("Top or Down: ");  
+//		upDown=UART_InUDec();
+//		OutCRLF();
+
+//		UART_OutString("line: ");  
+//		line=UART_InUDec();
+//		OutCRLF();
+//		
+//		UART_OutString("value: ");  
+//		value=UART_InUDec();
+//		OutCRLF();
+
+//		ST7735_Message(upDown, line, "this is message: ", value);
+//		
+//			OutCRLF();
+//  }
+=======
 //---------------------Output help instructions---------------------
 // Output help instructions
 // Input: none
@@ -119,6 +216,7 @@ void Interpreter(void){
 		CMD_Parser(cmd_buffer, CMD_BUFFER_SIZE);
 		memset(cmd_buffer, 0, sizeof(cmd_buffer));
   }
+>>>>>>> 0ea6f188f7707610d5b52bd78c25a93702dcea63
 }
 
 

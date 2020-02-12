@@ -8,6 +8,7 @@
 
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include "../inc/tm4c123gh6pm.h"
 #include "../inc/CortexM.h"
@@ -26,9 +27,25 @@
 // Performance Measurements 
 int32_t MaxJitter;             // largest time jitter between interrupts in usec
 #define JITTERSIZE 64
+#define NUMTHREAD 3
+#define STACKSIZE 100
 uint32_t const JitterSize=JITTERSIZE;
 uint32_t JitterHistogram[JITTERSIZE]={0,};
 uint32_t ElapsedTimerCounter;
+
+struct tcb{
+  int32_t *sp;       // pointer to stack (valid for threads not running
+	struct tcb *next;  // linked-list pointer
+  uint32_t id;				 // id for the current thread
+	uint32_t sleepState;		 // sleep state of the thread, used for suspension
+	uint32_t priority;	 // the priority of the current thread (lab 3)
+	uint32_t blockedState;  // current state of the thread
+};
+typedef struct tcb tcbType; // meaning replace "struct tcb" with tcbType
+tcbType tcbs[NUMTHREAD];
+tcbType *RunPt;
+int32_t Stacks[NUMTHREAD][STACKSIZE];
+int32_t THREAD_ID = 0;	// THREAD_ID assign to threads
 
 /*------------------------------------------------------------------------------
   Systick Interrupt Handler
@@ -66,13 +83,15 @@ void OS_Init(void){
 
 }; 
 
+
+
 // ******** OS_InitSemaphore ************
 // initialize semaphore 
 // input:  pointer to a semaphore
 // output: none
 void OS_InitSemaphore(Sema4Type *semaPt, int32_t value){
   // put Lab 2 (and beyond) solution here
-
+	
 }; 
 
 // ******** OS_Wait ************
@@ -118,6 +137,25 @@ void OS_bSignal(Sema4Type *semaPt){
 }; 
 
 
+void SetInitialStack(int i){
+  tcbs[i].sp = &Stacks[i][STACKSIZE-16]; // thread stack pointer
+  Stacks[i][STACKSIZE-1] = 0x01000000;   // thumb bit
+  Stacks[i][STACKSIZE-3] = 0x14141414;   // R14
+  Stacks[i][STACKSIZE-4] = 0x12121212;   // R12
+  Stacks[i][STACKSIZE-5] = 0x03030303;   // R3
+  Stacks[i][STACKSIZE-6] = 0x02020202;   // R2
+  Stacks[i][STACKSIZE-7] = 0x01010101;   // R1
+  Stacks[i][STACKSIZE-8] = 0x00000000;   // R0
+  Stacks[i][STACKSIZE-9] = 0x11111111;   // R11
+  Stacks[i][STACKSIZE-10] = 0x10101010;  // R10
+  Stacks[i][STACKSIZE-11] = 0x09090909;  // R9
+  Stacks[i][STACKSIZE-12] = 0x08080808;  // R8
+  Stacks[i][STACKSIZE-13] = 0x07070707;  // R7
+  Stacks[i][STACKSIZE-14] = 0x06060606;  // R6
+  Stacks[i][STACKSIZE-15] = 0x05050505;  // R5
+  Stacks[i][STACKSIZE-16] = 0x04040404;  // R4
+}
+
 
 //******** OS_AddThread *************** 
 // add a foregound thread to the scheduler
@@ -129,10 +167,25 @@ void OS_bSignal(Sema4Type *semaPt){
 // In Lab 2, you can ignore both the stackSize and priority fields
 // In Lab 3, you can ignore the stackSize fields
 int OS_AddThread(void(*task)(void), 
-   uint32_t stackSize, uint32_t priority){
+   uint32_t stackSize, uint32_t priority){ int32_t status; 
   // put Lab 2 (and beyond) solution here
-
-     
+	status = StartCritical();
+	if (RunPt) {
+		tcbs[THREAD_ID].next = &tcbs[THREAD_ID]; // set first node pointing to itself
+		RunPt = &tcbs[0]; 											 // initiate first task
+	} else {
+		tcbType* orginNext = RunPt -> next;	// store the origin next node
+		RunPt -> next = &tcbs[THREAD_ID]; 	// current node.next point to new node
+		tcbs[THREAD_ID].next = orginNext; 	// new node.next points to origin next
+	}
+	
+	tcbs[THREAD_ID].id = THREAD_ID;			  // set the id field of the node
+	tcbs[THREAD_ID].priority = priority;  // set the priority field of the node
+	
+	SetInitialStack(THREAD_ID); Stacks[THREAD_ID][STACKSIZE-2] = (int32_t)(task); // PC
+	THREAD_ID++;	// increment thread id for future new threads
+	
+  EndCritical(status);   
   return 0; // replace this line with solution
 };
 
@@ -255,7 +308,6 @@ void OS_Kill(void){
 void OS_Suspend(void){
   // put Lab 2 (and beyond) solution here
   
-
 };
   
 // ******** OS_Fifo_Init ************
@@ -393,7 +445,7 @@ void OS_ClearMsTime(void){
   // put Lab 1 solution here
 	ElapsedTimerCounter = 0;
 	uint32_t F1000HZ = (80000000/1000);
-	Timer5A_Init(&OS_CounterIncrement, F1000HZ, 2);  // initialize timer5A (100 Hz)
+	Timer5A_Init(&OS_CounterIncrement, F1000HZ, 2);  // initialize timer4A (1000 Hz)
   //EnableInterrupts();
 };
 
