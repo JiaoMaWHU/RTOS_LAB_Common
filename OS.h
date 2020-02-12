@@ -81,6 +81,18 @@ void OS_bWait(Sema4Type *semaPt);
 // output: none
 void OS_bSignal(Sema4Type *semaPt); 
 
+//******** OS_SetInitialStack ***************
+// Inputs: int i, which stack
+// Outputs: none
+// initialize a stack with special values
+void OS_SetInitialStack(int i);
+
+//******** OS_RunPtrScheduler ***************
+// Inputs: none
+// Outputs: none
+// move RunPtr to the next thread
+void OS_RunPtrScheduler(void);
+
 //******** OS_AddThread *************** 
 // add a foregound thread to the scheduler
 // Inputs: pointer to a void/void foreground task
