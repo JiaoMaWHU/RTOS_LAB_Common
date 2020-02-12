@@ -47,6 +47,8 @@ tcbType *RunPt;
 int32_t Stacks[NUMTHREAD][STACKSIZE];
 int32_t THREAD_ID = 0;	// THREAD_ID assign to threads
 
+
+
 /*------------------------------------------------------------------------------
   Systick Interrupt Handler
   SysTick interrupt happens every 10 ms
@@ -136,8 +138,11 @@ void OS_bSignal(Sema4Type *semaPt){
 
 }; 
 
-
-void SetInitialStack(int i){
+//******** OS_SetInitialStack ***************
+// Inputs: int i, which stack
+// Outputs: none
+// initialize a stack with special values
+void OS_SetInitialStack(int i){
   tcbs[i].sp = &Stacks[i][STACKSIZE-16]; // thread stack pointer
   Stacks[i][STACKSIZE-1] = 0x01000000;   // thumb bit
   Stacks[i][STACKSIZE-3] = 0x14141414;   // R14
@@ -156,6 +161,13 @@ void SetInitialStack(int i){
   Stacks[i][STACKSIZE-16] = 0x04040404;  // R4
 }
 
+//******** OS_RunPtrScheduler ***************
+// Inputs: none
+// Outputs: none
+// move RunPtr to the next thread
+void OS_RunPtrScheduler(void){
+	RunPt = RunPt->next;
+}
 
 //******** OS_AddThread *************** 
 // add a foregound thread to the scheduler
@@ -167,7 +179,8 @@ void SetInitialStack(int i){
 // In Lab 2, you can ignore both the stackSize and priority fields
 // In Lab 3, you can ignore the stackSize fields
 int OS_AddThread(void(*task)(void), 
-   uint32_t stackSize, uint32_t priority){ int32_t status; 
+   uint32_t stackSize, uint32_t priority){
+	int32_t status; 
   // put Lab 2 (and beyond) solution here
 	status = StartCritical();
 	if (RunPt) {
@@ -182,7 +195,7 @@ int OS_AddThread(void(*task)(void),
 	tcbs[THREAD_ID].id = THREAD_ID;			  // set the id field of the node
 	tcbs[THREAD_ID].priority = priority;  // set the priority field of the node
 	
-	SetInitialStack(THREAD_ID); Stacks[THREAD_ID][STACKSIZE-2] = (int32_t)(task); // PC
+	OS_SetInitialStack(THREAD_ID); Stacks[THREAD_ID][STACKSIZE-2] = (int32_t)(task); // PC
 	THREAD_ID++;	// increment thread id for future new threads
 	
   EndCritical(status);   
@@ -445,7 +458,7 @@ void OS_ClearMsTime(void){
   // put Lab 1 solution here
 	ElapsedTimerCounter = 0;
 	uint32_t F1000HZ = (80000000/1000);
-	Timer5A_Init(&OS_CounterIncrement, F1000HZ, 2);  // initialize timer4A (1000 Hz)
+	Timer5A_Init(&OS_CounterIncrement, F1000HZ, 2);  // initialize timer5A (1000 Hz)
   //EnableInterrupts();
 };
 
