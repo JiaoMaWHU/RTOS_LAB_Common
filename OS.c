@@ -16,6 +16,7 @@
 #include "../inc/Timer4A.h"
 #include "../inc/Timer5A.h"
 #include "../inc/WTimer0A.h"
+#include "../inc/LaunchPad.h"
 #include "../RTOS_Labs_common/OS.h"
 #include "../RTOS_Labs_common/ST7735.h"
 #include "../inc/ADCT0ATrigger.h"
@@ -33,7 +34,7 @@ void StartOS(void);
 int32_t MaxJitter;             // largest time jitter between interrupts in usec
 #define JITTERSIZE 64
 #define NUMTHREAD 3
-#define STACKSIZE 100
+#define STACKSIZE 128
 
 uint32_t const JitterSize=JITTERSIZE;
 uint32_t JitterHistogram[JITTERSIZE]={0,};
@@ -50,10 +51,11 @@ struct tcb{
 
 typedef struct tcb tcbType; // meaning replace "struct tcb" with tcbType
 tcbType tcbs[NUMTHREAD];
-tcbType *RunPt;
+tcbType *RunPt = NULL;
+tcbType *TailPt = NULL;
 
 int32_t Stacks[NUMTHREAD][STACKSIZE];
-int32_t THREAD_ID = 0;	// THREAD_ID assign to threads
+uint32_t THREAD_ID = 0;	// THREAD_ID assign to threads
 
 /*------------------------------------------------------------------------------
   Systick Interrupt Handler
@@ -187,25 +189,25 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 	uint32_t status; 
   // put Lab 2 (and beyond) solution here
 	status = StartCritical();
-	if (!RunPt) {
+	if (TailPt==NULL) {
 		tcbs[THREAD_ID].next = &tcbs[THREAD_ID]; // set first node pointing to itself
 		RunPt = &tcbs[THREAD_ID]; 							// initiate first task
+		TailPt = &tcbs[THREAD_ID]; 							// initiate tail node
 	} else {
-		tcbType* orginNext = RunPt -> next;	// store the origin next node
-		RunPt -> next = &tcbs[THREAD_ID]; 	// current node.next point to new node
+		tcbType* orginNext = TailPt -> next;	// store the origin next node
+		TailPt -> next = &tcbs[THREAD_ID]; 	// current node.next point to new node
 		tcbs[THREAD_ID].next = orginNext; 	// new node.next points to origin next
 		orginNext = NULL; // clear tmp pointer
+		TailPt = TailPt->next;
 	}
-	
 	tcbs[THREAD_ID].id = THREAD_ID;			  // set the id field of the node
 	tcbs[THREAD_ID].priority = priority;  // set the priority field of the node
-	
 	OS_SetInitialStack(THREAD_ID); 
 	Stacks[THREAD_ID][STACKSIZE-2] = (int32_t)(task); // PC
 	THREAD_ID++;	// increment thread id for future new threads
 	
   EndCritical(status);   
-  return 0; // replace this line with solution
+  return 1; // replace this line with solution
 };
 
 //******** OS_Id *************** 
@@ -490,6 +492,8 @@ uint32_t OS_MsTime(void){
 // It is ok to limit the range of theTimeSlice to match the 24-bit SysTick
 void OS_Launch(uint32_t theTimeSlice){
   // put Lab 2 (and beyond) solution here
+	NVIC_ST_RELOAD_R = theTimeSlice - 1;
+	NVIC_ST_CTRL_R = 0X00000007;
 	StartOS(); // start on the first task
 };
 
