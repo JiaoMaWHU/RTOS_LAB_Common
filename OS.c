@@ -99,7 +99,7 @@ void OS_Init(void){
 // output: none
 void OS_InitSemaphore(Sema4Type *semaPt, int32_t value){
   // put Lab 2 (and beyond) solution here
-
+	semaPt->Value = value;
 }; 
 
 // ******** OS_Wait ************
@@ -110,7 +110,13 @@ void OS_InitSemaphore(Sema4Type *semaPt, int32_t value){
 // output: none
 void OS_Wait(Sema4Type *semaPt){
   // put Lab 2 (and beyond) solution here
-  
+  DisableInterrupts(); 
+	while((semaPt->Value) == 0){
+		EnableInterrupts();
+		DisableInterrupts();
+	}
+	semaPt->Value -= 1;
+  EnableInterrupts();
 }; 
 
 // ******** OS_Signal ************
@@ -121,7 +127,10 @@ void OS_Wait(Sema4Type *semaPt){
 // output: none
 void OS_Signal(Sema4Type *semaPt){
   // put Lab 2 (and beyond) solution here
-
+	long status;
+	status = StartCritical(); 
+	semaPt->Value += 1; 
+	EndCritical(status);
 }; 
 
 // ******** OS_bWait ************
@@ -131,7 +140,13 @@ void OS_Signal(Sema4Type *semaPt){
 // output: none
 void OS_bWait(Sema4Type *semaPt){
   // put Lab 2 (and beyond) solution here
-
+	DisableInterrupts(); 
+	while((semaPt->Value) == 0){
+		EnableInterrupts();
+		DisableInterrupts();
+	}
+	semaPt->Value = 0;
+  EnableInterrupts();
 }; 
 
 // ******** OS_bSignal ************
@@ -141,7 +156,10 @@ void OS_bWait(Sema4Type *semaPt){
 // output: none
 void OS_bSignal(Sema4Type *semaPt){
   // put Lab 2 (and beyond) solution here
-
+	long status;
+	status = StartCritical(); 
+	semaPt->Value = 1; 
+	EndCritical(status);
 }; 
 
 //******** OS_SetInitialStack ***************

@@ -1412,6 +1412,8 @@ void ST7735_Message(uint32_t  d, uint32_t  l, char *pt, int32_t value){
 	uint16_t size = 1;
 	uint16_t col = 0; // x
 	uint16_t row = l*size + (d*8); // y
+	
+	OS_bWait(&LCDFree);
 	ST7735_FillRect(col*6, (int16_t)row*10, 21*6, 10, ST7735_BLACK); // clear this line
 	if(pt==NULL){
 		return;
@@ -1422,6 +1424,7 @@ void ST7735_Message(uint32_t  d, uint32_t  l, char *pt, int32_t value){
 	strcat(print_str, ", ");
 	strcat(print_str, pt);
 	ST7735_DrawString(col, row, print_str, ST7735_WHITE);
+	OS_bSignal(&LCDFree);
 }
 
 
