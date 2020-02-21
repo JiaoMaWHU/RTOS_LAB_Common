@@ -393,23 +393,32 @@ int OS_AddSW2Task(void(*task)(void), uint32_t priority){
 void OS_Sleep(uint32_t sleepTime){
   // put Lab 2 (and beyond) solution here
 	DisableInterrupts();
-	// remove from tcb cycles
+	RunPt->sleepCounter = (sleepTime+1)/2;
+	RunPt->blockedState = SLEEP;
+	
 	tcbType* saveRunPt = RunPt;
+	// remove from tcb cycles
 	if(RunPt->next==RunPt){ // only one in tcb cycle
 		RunPt = NULL;
+		TailPt = NULL;
 	}else{ 									// not empty tcb cycles
+		if(TailPt==RunPt){
+			TailPt = RunPt->next;
+		}
 		RunPt->next->prior = RunPt->prior;
 		RunPt->prior->next = RunPt->next;
 		RunPt = RunPt->prior;
 	}
 	// insert into queue
-	if(headToSleepQueue==NULL){ // empty queue
+	if(headToSleepQueue==NULL){ // empty queue, the first pt
 		headToSleepQueue = saveRunPt;
-		headToSleepQueue->next = saveRunPt;
-		headToSleepQueue->prior = saveRunPt;
-	}else{								// not empty queue
-		saveRunPt->next = headToSleepQueue->next; 
-		headToSleepQueue->next->prior = saveRunPt;
+		headToSleepQueue->next = NULL;
+		headToSleepQueue->prior = NULL;
+	}else{											// not empty queue
+		saveRunPt->next = headToSleepQueue->next;
+		if(headToSleepQueue->next!=NULL){
+			headToSleepQueue->next->prior = saveRunPt;
+		}
 		saveRunPt->prior = headToSleepQueue;
 		headToSleepQueue->next = saveRunPt;
 	}
