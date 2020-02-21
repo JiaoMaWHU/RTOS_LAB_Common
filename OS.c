@@ -51,6 +51,7 @@ struct tcb{
 	uint32_t sleepCounter;		 // sleep state of the thread, used for suspension
 	uint32_t priority;	 // the priority of the current thread (lab 3)
 	uint32_t blockedState;  // current state of the thread
+	uint32_t sleepState;  // current state of the thread
 };
 
 typedef struct tcb tcbType; // meaning replace "struct tcb" with tcbType
@@ -242,6 +243,9 @@ void OS_SetInitialStack(int i){
 // move RunPtr to the next thread
 void OS_RunPtrScheduler(void){
 	RunPt = RunPt->next;
+	while((RunPt->blockedState)){
+	
+	}
 }
 
 //******** OS_AddThread *************** 
@@ -424,7 +428,7 @@ void OS_Sleep(uint32_t sleepTime){
 	}
 	EnableInterrupts();
 	ContextSwitch(); // questions here
-};  
+};
 
 // ******** OS_Kill ************
 // kill the currently running thread, release its TCB and stack
