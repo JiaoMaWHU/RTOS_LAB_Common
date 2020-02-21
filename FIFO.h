@@ -27,39 +27,30 @@
 
 #ifndef __FIFO_H__
 #define __FIFO_H__
-#include "../RTOS_Labs_common/OS.h"
 
 
 // macro to create an index FIFO
 #define AddIndexFifo(NAME,SIZE,TYPE,SUCCESS,FAIL) \
 uint32_t volatile NAME ## PutI;    \
 uint32_t volatile NAME ## GetI;    \
-Sema4Type NAME ## Sema;       		 \
 TYPE static NAME ## Fifo [SIZE];        \
 void NAME ## Fifo_Init(void){           \
-	OS_InitSemaphore(&(NAME ## Sema),1);  \
   NAME ## PutI = NAME ## GetI = 0;      \
 }                                       \
 int NAME ## Fifo_Put (TYPE data){       \
-	OS_bWait(&(NAME ## Sema));	\
   if(( NAME ## PutI - NAME ## GetI ) & ~(SIZE-1)){  \
-		OS_bSignal(&(NAME ## Sema));			\
     return(FAIL);      \
   }                    \
   NAME ## Fifo[ NAME ## PutI &(SIZE-1)] = data; \
   NAME ## PutI ## ++;  \
-	OS_bSignal(&(NAME ## Sema));					\
   return(SUCCESS);     \
 }                      \
 int NAME ## Fifo_Get (TYPE *datapt){  \
-	OS_bWait(&(NAME ## Sema));	\
   if( NAME ## PutI == NAME ## GetI ){ \
-		OS_bSignal(&(NAME ## Sema));			\
     return(FAIL);      \
   }                    \
   *datapt = NAME ## Fifo[ NAME ## GetI &(SIZE-1)];  \
   NAME ## GetI ## ++;  \
-	OS_bSignal(&(NAME ## Sema));			\
   return(SUCCESS);     \
 }                      \
 unsigned short NAME ## Fifo_Size (void){  \
