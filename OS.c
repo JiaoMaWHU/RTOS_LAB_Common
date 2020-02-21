@@ -35,6 +35,9 @@ int32_t MaxJitter;             // largest time jitter between interrupts in usec
 #define JITTERSIZE 64
 #define NUMTHREAD 3
 #define STACKSIZE 128
+#define RUN 0
+#define ACTIVE 1
+#define SLEEP 2
 
 uint32_t const JitterSize=JITTERSIZE;
 uint32_t JitterHistogram[JITTERSIZE]={0,};
@@ -45,7 +48,7 @@ struct tcb{
 	struct tcb *next;  // linked-list pointer
 	struct tcb *prior;  // linked-list pointer
   uint32_t id;				 // id for the current thread
-	uint32_t sleepState;		 // sleep state of the thread, used for suspension
+	uint32_t sleepCounter;		 // sleep state of the thread, used for suspension
 	uint32_t priority;	 // the priority of the current thread (lab 3)
 	uint32_t blockedState;  // current state of the thread
 };
@@ -58,7 +61,51 @@ tcbType *TailPt = NULL;
 int32_t Stacks[NUMTHREAD][STACKSIZE];
 uint32_t THREAD_ID = 0;	// THREAD_ID assign to threads
 
+tcbType* headToSleepQueue = NULL; // store the pointer for sleep tcb
+
 void (*UserSW1Task)(void);   // user function
+
+/*------------------------
+	traverse the queue of sleeping threads
+	decrease the time count
+	if meets zero, insert the thread in the cycle using tailnode 
+------------------------*/
+void traverseSleepQueue(void){
+	tcbType* tmpQueueNode = headToSleepQueue;
+	uint32_t status = StartCritical(); //disable interrupt
+	while(tmpQueueNode!=NULL){
+		tmpQueueNode->sleepCounter -= 1;
+		if(tmpQueueNode->sleepCounter==0){
+			tmpQueueNode->blockedState = ACTIVE;
+			tcbType* originNext = tmpQueueNode->next; // reserved for next loop
+			// remove pt from queue
+			if(tmpQueueNode->next==tmpQueueNode){ // only one node left
+				headToSleepQueue = NULL;
+			}else{
+				tmpQueueNode->prior->next = tmpQueueNode->next;
+				tmpQueueNode->next->prior = tmpQueueNode->prior;
+			}
+			// insert after tailnode
+			if(TailPt==NULL){ // tailpt and runpt all null, means the only thread in OS
+				RunPt=tmpQueueNode;
+				TailPt=tmpQueueNode;
+				TailPt->next = TailPt;
+				TailPt->prior = TailPt;
+			}else{
+				tmpQueueNode->next = TailPt->next;
+				TailPt->next->prior = tmpQueueNode;
+				TailPt->next = tmpQueueNode;
+				tmpQueueNode->prior = TailPt;
+				TailPt = TailPt->next;
+			}
+			tmpQueueNode = originNext;
+		}else{
+			tmpQueueNode = tmpQueueNode->next;
+		}
+	}
+	EndCritical(status);	//enable interrupt
+}
+
 
 /*------------------------------------------------------------------------------
   Systick Interrupt Handler
@@ -66,6 +113,7 @@ void (*UserSW1Task)(void);   // user function
   used for preemptive thread switch
  *------------------------------------------------------------------------------*/
 void SysTick_Handler(void) {
+	traverseSleepQueue();
 	ContextSwitch();
 } // end SysTick_Handler
 
@@ -78,7 +126,7 @@ void OS_UnLockScheduler(unsigned long previous){
 }
 
 
-void SysTick_Init(unsigned long period){
+void SysTick_Init(unsigned long period){ // not set, specified in testmain1.... functions
   
 }
 
@@ -210,19 +258,23 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 	uint32_t status; 
   // put Lab 2 (and beyond) solution here
 	status = StartCritical();
-	if (TailPt==NULL) {
+	if (TailPt==NULL) {												// initialization
 		tcbs[THREAD_ID].next = &tcbs[THREAD_ID]; // set first node pointing to itself
+		tcbs[THREAD_ID].prior = &tcbs[THREAD_ID];
 		RunPt = &tcbs[THREAD_ID]; 							// initiate first task
 		TailPt = &tcbs[THREAD_ID]; 							// initiate tail node
 	} else {
 		tcbType* orginNext = TailPt -> next;	// store the origin next node
 		TailPt -> next = &tcbs[THREAD_ID]; 	// current node.next point to new node
 		tcbs[THREAD_ID].next = orginNext; 	// new node.next points to origin next
+		tcbs[THREAD_ID].prior = TailPt;
+		orginNext->prior = &tcbs[THREAD_ID];
 		orginNext = NULL; // clear tmp pointer
 		TailPt = TailPt->next;
 	}
 	tcbs[THREAD_ID].id = THREAD_ID;			  // set the id field of the node
 	tcbs[THREAD_ID].priority = priority;  // set the priority field of the node
+	tcbs[THREAD_ID].blockedState = ACTIVE;
 	OS_SetInitialStack(THREAD_ID); 
 	Stacks[THREAD_ID][STACKSIZE-2] = (int32_t)(task); // PC
 	THREAD_ID++;	// increment thread id for future new threads
@@ -340,8 +392,29 @@ int OS_AddSW2Task(void(*task)(void), uint32_t priority){
 // OS_Sleep(0) implements cooperative multitasking
 void OS_Sleep(uint32_t sleepTime){
   // put Lab 2 (and beyond) solution here
-  
-
+	DisableInterrupts();
+	// remove from tcb cycles
+	tcbType* saveRunPt = RunPt;
+	if(RunPt->next==RunPt){ // only one in tcb cycle
+		RunPt = NULL;
+	}else{ 									// not empty tcb cycles
+		RunPt->next->prior = RunPt->prior;
+		RunPt->prior->next = RunPt->next;
+		RunPt = RunPt->prior;
+	}
+	// insert into queue
+	if(headToSleepQueue==NULL){ // empty queue
+		headToSleepQueue = saveRunPt;
+		headToSleepQueue->next = saveRunPt;
+		headToSleepQueue->prior = saveRunPt;
+	}else{								// not empty queue
+		saveRunPt->next = headToSleepQueue->next; 
+		headToSleepQueue->next->prior = saveRunPt;
+		saveRunPt->prior = headToSleepQueue;
+		headToSleepQueue->next = saveRunPt;
+	}
+	EnableInterrupts();
+	ContextSwitch(); // questions here
 };  
 
 // ******** OS_Kill ************
@@ -350,7 +423,8 @@ void OS_Sleep(uint32_t sleepTime){
 // output: none
 void OS_Kill(void){
   // put Lab 2 (and beyond) solution here
- 
+	DisableInterrupts();
+	
   EnableInterrupts();   // end of atomic section 
   for(;;){};        // can not return
     
