@@ -249,7 +249,7 @@ uint32_t OS_Id(void){
 // You are free to select the time resolution for this function
 // It is assumed that the user task will run to completion and return
 // This task can not spin, block, loop, sleep, or kill
-// This task can call OS_Signal  OS_bSignal   OS_AddThread
+// This task can call OS_Signal  OS_bSignal  OS_AddThread
 // This task does not have a Thread ID
 // In lab 1, this command will be called 1 time
 // In lab 2, this command will be called 0 or 1 times
@@ -260,8 +260,7 @@ uint32_t OS_Id(void){
 int OS_AddPeriodicThread(void(*task)(void), 
    uint32_t period, uint32_t priority){
   // put Lab 2 (and beyond) solution here
-  
-     
+  Timer4A_Init(task, period * 1000, priority); // period ms sampling
   return 0; // replace this line with solution
 };
 
