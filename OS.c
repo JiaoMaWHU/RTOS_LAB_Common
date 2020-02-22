@@ -8,6 +8,7 @@
 
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include "../inc/tm4c123gh6pm.h"
 #include "../inc/CortexM.h"
@@ -38,7 +39,6 @@ int32_t MaxJitter;             // largest time jitter between interrupts in usec
 #define RUN 0
 #define ACTIVE 1
 #define SLEEP 2
-
 uint32_t const JitterSize=JITTERSIZE;
 uint32_t JitterHistogram[JITTERSIZE]={0,};
 uint32_t ElapsedTimerCounter;
@@ -150,6 +150,8 @@ void OS_Init(void){
 	PLL_Init(Bus80MHz);         // set processor clock to 80 MHz
 	Timer3A_Init(&OS_Time_Increament, TIME_12500US, 2); 
 }; 
+
+
 
 // ******** OS_InitSemaphore ************
 // initialize semaphore 
