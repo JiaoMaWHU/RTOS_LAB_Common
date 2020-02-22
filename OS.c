@@ -33,7 +33,7 @@ void StartOS(void);
 // Performance Measurements 
 int32_t MaxJitter;             // largest time jitter between interrupts in usec
 #define JITTERSIZE 64
-#define NUMTHREAD 3
+#define NUMTHREAD 16
 #define STACKSIZE 128
 #define RUN 0
 #define ACTIVE 1
@@ -50,19 +50,23 @@ struct tcb{
   uint32_t id;				 // id for the current thread
 	uint32_t sleepCounter;		 // sleep state of the thread, used for suspension
 	uint32_t priority;	 // the priority of the current thread (lab 3)
-	uint32_t blockedState;  // current state of the thread
-	uint32_t sleepState;  // current state of the thread
+	uint32_t state;  // current state of the thread
 };
 
 typedef struct tcb tcbType; // meaning replace "struct tcb" with tcbType
 tcbType tcbs[NUMTHREAD];
 tcbType *RunPt = NULL;
 tcbType *TailPt = NULL;
+tcbType *NextPt = NULL;
 
 int32_t Stacks[NUMTHREAD][STACKSIZE];
-uint32_t THREAD_ID = 0;	// THREAD_ID assign to threads
+uint32_t threadIdMax = 0;
 
-tcbType* headToSleepQueue = NULL; // store the pointer for sleep tcb
+tcbType dummyHeadOfQueue;
+tcbType* headToSleepQueue = &dummyHeadOfQueue; // store the pointer for sleep tcbType
+
+int32_t restoredTcbStack[NUMTHREAD];
+int32_t restoreTcbStackPt = -1;
 
 void (*UserSW1Task)(void);   // user function
 
@@ -72,18 +76,17 @@ void (*UserSW1Task)(void);   // user function
 	if meets zero, insert the thread in the cycle using tailnode 
 ------------------------*/
 void traverseSleepQueue(void){
-	tcbType* tmpQueueNode = headToSleepQueue;
+	tcbType* tmpQueueNode = headToSleepQueue->next;
 	uint32_t status = StartCritical(); //disable interrupt
 	while(tmpQueueNode!=NULL){
 		tmpQueueNode->sleepCounter -= 1;
 		if(tmpQueueNode->sleepCounter==0){
-			tmpQueueNode->blockedState = ACTIVE;
+			tmpQueueNode->state = ACTIVE;
 			tcbType* originNext = tmpQueueNode->next; // reserved for next loop
 			// remove pt from queue
-			if(tmpQueueNode->next==tmpQueueNode){ // only one node left
-				headToSleepQueue = NULL;
-			}else{
-				tmpQueueNode->prior->next = tmpQueueNode->next;
+			// tail or head or center or only one
+			tmpQueueNode->prior->next = tmpQueueNode->next;
+			if(tmpQueueNode->next!=NULL){
 				tmpQueueNode->next->prior = tmpQueueNode->prior;
 			}
 			// insert after tailnode
@@ -114,6 +117,7 @@ void traverseSleepQueue(void){
   used for preemptive thread switch
  *------------------------------------------------------------------------------*/
 void SysTick_Handler(void) {
+	NextPt = RunPt->next;
 	traverseSleepQueue();
 	ContextSwitch();
 } // end SysTick_Handler
@@ -242,10 +246,8 @@ void OS_SetInitialStack(int i){
 // Outputs: none
 // move RunPtr to the next thread
 void OS_RunPtrScheduler(void){
-	RunPt = RunPt->next;
-	while((RunPt->blockedState)){
-	
-	}
+	RunPt = NextPt;
+	RunPt->state = RUN;
 }
 
 //******** OS_AddThread *************** 
@@ -259,29 +261,37 @@ void OS_RunPtrScheduler(void){
 // In Lab 3, you can ignore the stackSize fields
 int OS_AddThread(void(*task)(void), uint32_t stackSize, 
 					uint32_t priority){
-	uint32_t status; 
+	uint32_t threadID;
+	uint32_t status;
   // put Lab 2 (and beyond) solution here
 	status = StartCritical();
+	if(restoreTcbStackPt>=0){ 								// use restored tcb or not
+		threadID = restoredTcbStack[restoreTcbStackPt];
+		restoreTcbStackPt--;
+	}else{
+		threadID = threadIdMax;
+		threadIdMax++;
+	}
 	if (TailPt==NULL) {												// initialization
-		tcbs[THREAD_ID].next = &tcbs[THREAD_ID]; // set first node pointing to itself
-		tcbs[THREAD_ID].prior = &tcbs[THREAD_ID];
-		RunPt = &tcbs[THREAD_ID]; 							// initiate first task
-		TailPt = &tcbs[THREAD_ID]; 							// initiate tail node
+		tcbs[threadID].next = &tcbs[threadID]; // set first node pointing to itself
+		tcbs[threadID].prior = &tcbs[threadID];
+		RunPt = &tcbs[threadID]; 							// initiate first task
+		TailPt = &tcbs[threadID]; 							// initiate tail node
 	} else {
 		tcbType* orginNext = TailPt -> next;	// store the origin next node
-		TailPt -> next = &tcbs[THREAD_ID]; 	// current node.next point to new node
-		tcbs[THREAD_ID].next = orginNext; 	// new node.next points to origin next
-		tcbs[THREAD_ID].prior = TailPt;
-		orginNext->prior = &tcbs[THREAD_ID];
+		TailPt -> next = &tcbs[threadID]; 	// current node.next point to new node
+		tcbs[threadID].next = orginNext; 	// new node.next points to origin next
+		tcbs[threadID].prior = TailPt;
+		orginNext->prior = &tcbs[threadID];
 		orginNext = NULL; // clear tmp pointer
 		TailPt = TailPt->next;
 	}
-	tcbs[THREAD_ID].id = THREAD_ID;			  // set the id field of the node
-	tcbs[THREAD_ID].priority = priority;  // set the priority field of the node
-	tcbs[THREAD_ID].blockedState = ACTIVE;
-	OS_SetInitialStack(THREAD_ID); 
-	Stacks[THREAD_ID][STACKSIZE-2] = (int32_t)(task); // PC
-	THREAD_ID++;	// increment thread id for future new threads
+	tcbs[threadID].id = threadID;			  // set the id field of the node
+	tcbs[threadID].priority = priority;  // set the priority field of the node
+	tcbs[threadID].state = ACTIVE;
+	OS_SetInitialStack(threadID); 
+	Stacks[threadID][STACKSIZE-2] = (int32_t)(task); // PC
+	threadID++;	// increment thread id for future new threads
 	
   EndCritical(status);   
   return 1; // replace this line with solution
@@ -397,35 +407,24 @@ int OS_AddSW2Task(void(*task)(void), uint32_t priority){
 void OS_Sleep(uint32_t sleepTime){
   // put Lab 2 (and beyond) solution here
 	DisableInterrupts();
+	NextPt = RunPt -> next;
 	RunPt->sleepCounter = (sleepTime+1)/2;
-	RunPt->blockedState = SLEEP;
+	RunPt->state = SLEEP;
 	
-	tcbType* saveRunPt = RunPt;
 	// remove from tcb cycles
-	if(RunPt->next==RunPt){ // only one in tcb cycle
-		RunPt = NULL;
-		TailPt = NULL;
-	}else{ 									// not empty tcb cycles
-		if(TailPt==RunPt){
-			TailPt = RunPt->next;
-		}
-		RunPt->next->prior = RunPt->prior;
-		RunPt->prior->next = RunPt->next;
-		RunPt = RunPt->prior;
+	if(TailPt==RunPt){
+		TailPt = RunPt->next;
 	}
+	RunPt->next->prior = RunPt->prior;
+	RunPt->prior->next = RunPt->next;
+	
 	// insert into queue
-	if(headToSleepQueue==NULL){ // empty queue, the first pt
-		headToSleepQueue = saveRunPt;
-		headToSleepQueue->next = NULL;
-		headToSleepQueue->prior = NULL;
-	}else{											// not empty queue
-		saveRunPt->next = headToSleepQueue->next;
-		if(headToSleepQueue->next!=NULL){
-			headToSleepQueue->next->prior = saveRunPt;
-		}
-		saveRunPt->prior = headToSleepQueue;
-		headToSleepQueue->next = saveRunPt;
+	RunPt->next = headToSleepQueue->next;
+	if(headToSleepQueue->next!=NULL){ // empty queue, the first pt
+		headToSleepQueue->next->prior = RunPt;
 	}
+	headToSleepQueue->next = RunPt;
+	RunPt->prior = headToSleepQueue;
 	EnableInterrupts();
 	ContextSwitch(); // questions here
 };
@@ -437,8 +436,20 @@ void OS_Sleep(uint32_t sleepTime){
 void OS_Kill(void){
   // put Lab 2 (and beyond) solution here
 	DisableInterrupts();
+	NextPt = RunPt -> next;
 	
-  EnableInterrupts();   // end of atomic section 
+	if(TailPt==RunPt){
+		TailPt = RunPt->next;
+	}
+	
+	RunPt->next->prior = RunPt->prior;
+	RunPt->prior->next = RunPt->next;
+	
+	restoreTcbStackPt++;
+	restoredTcbStack[restoreTcbStackPt] = RunPt->id;
+	
+	EnableInterrupts();
+	ContextSwitch(); // questions here
   for(;;){};        // can not return
     
 }; 
@@ -452,6 +463,7 @@ void OS_Kill(void){
 // output: none
 void OS_Suspend(void){
   // put Lab 2 (and beyond) solution here
+	NextPt = RunPt->next;
   ContextSwitch();
 };
   
@@ -618,6 +630,8 @@ void OS_Launch(uint32_t theTimeSlice){
   // put Lab 2 (and beyond) solution here
 	NVIC_ST_RELOAD_R = theTimeSlice - 1;
 	NVIC_ST_CTRL_R = 0X00000007;
+	headToSleepQueue->next=NULL; // initialize the head pt to queue
+	headToSleepQueue->prior=NULL; // initialize the head pt to queue
 	StartOS(); // start on the first task
 };
 

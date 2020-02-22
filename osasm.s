@@ -61,7 +61,6 @@ OSStartHang
 ;              triggers the PendSV exception which is where the real work is done.
 ;********************************************************************************************************
 
-;	IMPORT OS_RunPtrScheduler
 ContextSwitch
     LDR    R0, =NVIC_INT_CTRL
 	LDR    R1, =NVIC_PENDSVSET
@@ -104,14 +103,19 @@ ContextSwitch
 ;              therefore safe to assume that context being switched out was using the process stack (PSP).
 ;********************************************************************************************************
 
+	IMPORT OS_RunPtrScheduler
 PendSV_Handler; 			   ; 1) Saves R0-R3,R12,LR,PC,PSR
     CPSID   I                  ; 2) Prevent interrupt during switch
     PUSH    {R4-R11}           ; 3) Save remaining regs r4-11
     LDR     R0, =RunPt         ; 4) R0=pointer to RunPt, old thread
     LDR     R1, [R0]           ;    R1 = RunPt
     STR     SP, [R1]           ; 5) Save SP into TCB
-    LDR     R1, [R1,#4]        ; 6) R1 = RunPt->next
-    STR     R1, [R0]           ;    RunPt = R1
+;    LDR     R1, [R1,#4]        ; 6) R1 = RunPt->next
+;    STR     R1, [R0]           ;    RunPt = R1
+	PUSH 	{R0,LR}
+	BL 		OS_RunPtrScheduler
+	POP	 	{R0,LR}
+	LDR   	R1, [R0]
     LDR     SP, [R1]           ; 7) new thread SP; SP = RunPt->sp;
     POP     {R4-R11}           ; 8) restore regs r4-11
     CPSIE   I                  ; 9) tasks run with interrupts enabled
