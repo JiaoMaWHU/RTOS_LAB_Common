@@ -155,7 +155,9 @@ void OS_Init(void){
 // output: none
 void OS_InitSemaphore(Sema4Type *semaPt, int32_t value){
   // put Lab 2 (and beyond) solution here
+	DisableInterrupts();
 	semaPt->Value = value;
+	EnableInterrupts();
 }; 
 
 // ******** OS_Wait ************
@@ -329,10 +331,9 @@ uint32_t OS_Id(void){
 int OS_AddPeriodicThread(void(*task)(void), 
    uint32_t period, uint32_t priority){
   // put Lab 2 (and beyond) solution here
-  Timer4A_Init(task, period * 80000, priority); // period per ms sampling
+  Timer4A_Init(task, period, priority); // period per ms sampling
   return 0; // replace this line with solution
 };
-
 
 
 
