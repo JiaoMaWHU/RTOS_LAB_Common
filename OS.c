@@ -13,6 +13,7 @@
 #include "../inc/CortexM.h"
 #include "../inc/PLL.h"
 #include "../inc/LaunchPad.h"
+#include "../inc/Timer3A.h"
 #include "../inc/Timer4A.h"
 #include "../inc/Timer5A.h"
 #include "../inc/WTimer0A.h"
@@ -28,7 +29,6 @@ void OS_DisableInterrupts(void); // Disable interrupts
 void OS_EnableInterrupts(void);  // Enable interrupts
 void StartOS(void);
 void ContextSwitch(void);
-void StartOS(void);
 
 // Performance Measurements 
 int32_t MaxJitter;             // largest time jitter between interrupts in usec
@@ -42,6 +42,7 @@ int32_t MaxJitter;             // largest time jitter between interrupts in usec
 uint32_t const JitterSize=JITTERSIZE;
 uint32_t JitterHistogram[JITTERSIZE]={0,};
 uint32_t ElapsedTimerCounter;
+uint32_t OSTimeCounter;
 
 struct tcb{
   int32_t *sp;       // pointer to stack (valid for threads not running
@@ -146,7 +147,8 @@ void SysTick_Init(unsigned long period){ // not set, specified in testmain1.... 
 void OS_Init(void){
   // put Lab 2 (and beyond) solution here
 	OS_DisableInterrupts();
-	PLL_Init(Bus50MHz);         // set processor clock to 50 MHz
+	PLL_Init(Bus80MHz);         // set processor clock to 80 MHz
+	Timer3A_Init(&OS_Time_Increament, TIME_12500US, 2); 
 }; 
 
 // ******** OS_InitSemaphore ************
@@ -558,6 +560,16 @@ uint32_t OS_MailBox_Recv(void){
   return 0; // replace this line with solution
 };
 
+
+// ******** OS_Time_Increament ************
+// inreament the system time counter by 1
+// triggered every 12.5ns
+// Inputs:  none
+// Outputs: time in 12.5ns units, 0 to 4294967295
+void OS_Time_Increament(void) {
+	OSTimeCounter = OSTimeCounter + 1;
+}
+
 // ******** OS_Time ************
 // return the system time 
 // Inputs:  none
@@ -567,8 +579,7 @@ uint32_t OS_MailBox_Recv(void){
 //   this function and OS_TimeDifference have the same resolution and precision 
 uint32_t OS_Time(void){
   // put Lab 2 (and beyond) solution here
-
-  return 0; // replace this line with solution
+  return OSTimeCounter; // replace this line with solution
 };
 
 // ******** OS_TimeDifference ************
@@ -580,8 +591,7 @@ uint32_t OS_Time(void){
 //   this function and OS_Time have the same resolution and precision 
 uint32_t OS_TimeDifference(uint32_t start, uint32_t stop){
   // put Lab 2 (and beyond) solution here
-
-  return 0; // replace this line with solution
+  return stop - start; // replace this line with solution
 };
 
 
@@ -602,8 +612,7 @@ void OS_CounterIncrement(void){
 void OS_ClearMsTime(void){
   // put Lab 1 solution here
 	ElapsedTimerCounter = 0;
-	uint32_t F1000HZ = (80000000/1000);
-	Timer5A_Init(&OS_CounterIncrement, F1000HZ, 2);  // initialize timer5A (1000 Hz)
+	Timer5A_Init(&OS_CounterIncrement, TIME_1MS, 2);  // initialize timer5A (1000 Hz)
   //EnableInterrupts();
 };
 
