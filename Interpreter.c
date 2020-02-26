@@ -47,6 +47,7 @@ void Output_Help(void){
 	UART_OutString("adc_get: output the value of adc"); OutCRLF(); OutCRLF();
 	UART_OutString("clr_ms: clear the time counter and start counting"); OutCRLF(); OutCRLF();
 	UART_OutString("get_ms: output the time counter"); OutCRLF(); OutCRLF();
+	UART_OutString("get_metrics: output the performance metrics"); OutCRLF(); OutCRLF();
 }
 
 //---------------------Call lcd function---------------------

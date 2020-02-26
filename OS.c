@@ -39,10 +39,20 @@ int32_t MaxJitter;             // largest time jitter between interrupts in usec
 #define RUN 0
 #define ACTIVE 1
 #define SLEEP 2
+#define FifoBufferSize 32
 uint32_t const JitterSize=JITTERSIZE;
 uint32_t JitterHistogram[JITTERSIZE]={0,};
-uint32_t ElapsedTimerCounter;
-uint32_t OSTimeCounter;
+uint32_t ElapsedTimerCounter = 0;
+uint32_t OSTimeCounter = 0;
+
+uint32_t Mail;
+Sema4Type Send; // semaphore for mailbox
+Sema4Type Ack; // semaphore for mailbox
+
+Sema4Type CurrentFifoSize; // semaphore for mutex in OS_FIFO
+uint32_t FifoBuffer[FifoBufferSize];
+uint32_t inFifoId;
+uint32_t outFifoId;
 
 struct tcb{
   int32_t *sp;       // pointer to stack (valid for threads not running
@@ -147,8 +157,9 @@ void SysTick_Init(unsigned long period){ // not set, specified in testmain1.... 
 void OS_Init(void){
   // put Lab 2 (and beyond) solution here
 	OS_DisableInterrupts();
+	UART_Init();
+	ST7735_InitR(INITR_REDTAB); // LCD initialization
 	PLL_Init(Bus80MHz);         // set processor clock to 80 MHz
-	Timer3A_Init(&OS_Time_Increament, TIME_12500US, 2); 
 }; 
 
 
@@ -309,8 +320,7 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 // Outputs: Thread ID, number greater than zero 
 uint32_t OS_Id(void){
   // put Lab 2 (and beyond) solution here
-  
-  return 0; // replace this line with solution
+  return RunPt->id; // replace this line with solution
 };
 
 
@@ -483,8 +493,8 @@ void OS_Suspend(void){
 //    e.g., must be a power of 2,4,8,16,32,64,128
 void OS_Fifo_Init(uint32_t size){
   // put Lab 2 (and beyond) solution here
-   
-  
+	OS_InitSemaphore(&CurrentFifoSize, 0);
+	inFifoId = outFifoId = 0;
 };
 
 // ******** OS_Fifo_Put ************
@@ -497,8 +507,13 @@ void OS_Fifo_Init(uint32_t size){
 //  this function can not disable or enable interrupts
 int OS_Fifo_Put(uint32_t data){
   // put Lab 2 (and beyond) solution here
-
-    return 0; // replace this line with solution
+	if(CurrentFifoSize.Value == FifoBufferSize){
+		return 0;
+	}
+	FifoBuffer[inFifoId] = data;
+	inFifoId = (inFifoId+1)%FifoBufferSize;
+	OS_Signal(&CurrentFifoSize);
+  return 1; // replace this line with solution
 };  
 
 // ******** OS_Fifo_Get ************
@@ -508,8 +523,10 @@ int OS_Fifo_Put(uint32_t data){
 // Outputs: data 
 uint32_t OS_Fifo_Get(void){
   // put Lab 2 (and beyond) solution here
-  
-  return 0; // replace this line with solution
+  OS_Wait(&CurrentFifoSize);
+	uint32_t data = FifoBuffer[outFifoId];
+	outFifoId = (outFifoId+1)%FifoBufferSize;
+  return data; // replace this line with solution
 };
 
 // ******** OS_Fifo_Size ************
@@ -521,8 +538,7 @@ uint32_t OS_Fifo_Get(void){
 //          zero or less than zero if a call to OS_Fifo_Get will spin or block
 int32_t OS_Fifo_Size(void){
   // put Lab 2 (and beyond) solution here
-   
-  return 0; // replace this line with solution
+  return CurrentFifoSize.Value; // replace this line with solution
 };
 
 
@@ -532,8 +548,8 @@ int32_t OS_Fifo_Size(void){
 // Outputs: none
 void OS_MailBox_Init(void){
   // put Lab 2 (and beyond) solution here
-  
-
+	OS_InitSemaphore(&Send, 0);
+	OS_InitSemaphore(&Ack, 0);
   // put solution here
 };
 
@@ -546,8 +562,9 @@ void OS_MailBox_Init(void){
 void OS_MailBox_Send(uint32_t data){
   // put Lab 2 (and beyond) solution here
   // put solution here
-   
-
+	Mail = data;
+	OS_Signal(&Send);
+	OS_Wait(&Ack);
 };
 
 // ******** OS_MailBox_Recv ************
@@ -558,8 +575,11 @@ void OS_MailBox_Send(uint32_t data){
 // It will spin/block if the MailBox is empty 
 uint32_t OS_MailBox_Recv(void){
   // put Lab 2 (and beyond) solution here
- 
-  return 0; // replace this line with solution
+	uint32_t theData;
+	OS_Wait(&Send);
+	theData = Mail;
+	OS_Signal(&Ack);
+  return theData; // replace this line with solution
 };
 
 
@@ -581,7 +601,7 @@ void OS_Time_Increament(void) {
 //   this function and OS_TimeDifference have the same resolution and precision 
 uint32_t OS_Time(void){
   // put Lab 2 (and beyond) solution here
-  return OSTimeCounter; // replace this line with solution
+  return (uint32_t)((double)(OSTimeCounter*1000)/12.5); // replace this line with solution
 };
 
 // ******** OS_TimeDifference ************
@@ -642,6 +662,8 @@ void OS_Launch(uint32_t theTimeSlice){
   // put Lab 2 (and beyond) solution here
 	NVIC_ST_RELOAD_R = theTimeSlice - 1;
 	NVIC_ST_CTRL_R = 0X00000007;
+	Timer3A_Init(&OS_Time_Increament, TIME_1US, 0);
+	OS_ClearMsTime();
 	headToSleepQueue->next=NULL; // initialize the head pt to queue
 	headToSleepQueue->prior=NULL; // initialize the head pt to queue
 	StartOS(); // start on the first task

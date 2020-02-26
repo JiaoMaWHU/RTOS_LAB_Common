@@ -35,6 +35,7 @@
 #include "../inc/CortexM.h"
 #include "../RTOS_Labs_common/FIFO.h"
 #include "../RTOS_Labs_common/UART0int.h"
+#include "../RTOS_Labs_common/OS.h"
 
 #define NVIC_EN0_INT5           0x00000020  // Interrupt 5 enable
 
@@ -65,8 +66,13 @@
 #define FIFOSUCCESS 1         // return value on success
 #define FIFOFAIL    0         // return value on failure
                               // create index implementation FIFO (see FIFO.h)
-AddIndexFifo(Rx, FIFOSIZE, char, FIFOSUCCESS, FIFOFAIL)
+	
+Sema4Type RxDataAvailable;
+Sema4Type TxRoomLeft;
+
+
 AddIndexFifo(Tx, 1024, char, FIFOSUCCESS, FIFOFAIL)
+AddPointerFifo(Rx, FIFOSIZE, char, FIFOSUCCESS, FIFOFAIL)
 
 // Initialize UART0
 // Baud rate is 115200 bits/sec
@@ -95,6 +101,9 @@ void UART_Init(void){
                                         // UART0=priority 2
   NVIC_PRI1_R = (NVIC_PRI1_R&0xFFFF00FF)|0x00004000; // bits 13-15
   NVIC_EN0_R = NVIC_EN0_INT5;           // enable interrupt 5 in NVIC
+	
+	OS_InitSemaphore(&RxDataAvailable, 0);
+	OS_InitSemaphore(&TxRoomLeft, 1024);
 }
 // copy from hardware RX FIFO to software RX FIFO
 // stop when hardware RX FIFO is empty or software RX FIFO is full
