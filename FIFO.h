@@ -38,7 +38,6 @@ void NAME ## Fifo_Init(void){           \
   NAME ## PutI = NAME ## GetI = 0;      \
 }                                       \
 int NAME ## Fifo_Put (TYPE data){       \
-	OS_Wait(&TxRoomLeft);									\
   if(( NAME ## PutI - NAME ## GetI ) & ~(SIZE-1)){  \
     return(FAIL);      \
   }                    \
@@ -52,7 +51,6 @@ int NAME ## Fifo_Get (TYPE *datapt){  \
   }                    \
   *datapt = NAME ## Fifo[ NAME ## GetI &(SIZE-1)];  \
   NAME ## GetI ## ++;  \
-	OS_Signal(&TxRoomLeft);	\
   return(SUCCESS);     \
 }                      \
 unsigned short NAME ## Fifo_Size (void){  \
@@ -85,12 +83,10 @@ int NAME ## Fifo_Put (TYPE data){       \
   else{                                 \
     *( NAME ## PutPt ) = data;          \
     NAME ## PutPt = nextPutPt;          \
-		OS_Signal(&RxDataAvailable);				\
     return(SUCCESS);                    \
   }                                     \
 }                                       \
 int NAME ## Fifo_Get (TYPE *datapt){    \
-	OS_Wait(&RxDataAvailable);						\
   if( NAME ## PutPt == NAME ## GetPt ){ \
     return(FAIL);                       \
   }                                     \

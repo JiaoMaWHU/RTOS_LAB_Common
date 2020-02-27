@@ -34,7 +34,7 @@ void ContextSwitch(void);
 // Performance Measurements 
 int32_t MaxJitter;             // largest time jitter between interrupts in usec
 #define JITTERSIZE 64
-#define NUMTHREAD 16
+#define NUMTHREAD 32
 #define STACKSIZE 128
 #define RUN 0
 #define ACTIVE 1
@@ -184,8 +184,9 @@ void OS_InitSemaphore(Sema4Type *semaPt, int32_t value){
 void OS_Wait(Sema4Type *semaPt){
   // put Lab 2 (and beyond) solution here
   DisableInterrupts(); 
-	while((semaPt->Value) == 0){
+	while((semaPt->Value) <= 0){
 		EnableInterrupts();
+		OS_Suspend();
 		DisableInterrupts();
 	}
 	semaPt->Value -= 1;
@@ -287,6 +288,10 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 		restoreTcbStackPt--;
 	}else{
 		threadID = threadIdMax;
+		if(threadIdMax+1==NUMTHREAD){
+			EndCritical(status);   
+			return 1; // replace this line with solution
+		}
 		threadIdMax++;
 	}
 	if (TailPt==NULL) {												// initialization
@@ -601,7 +606,7 @@ void OS_Time_Increament(void) {
 //   this function and OS_TimeDifference have the same resolution and precision 
 uint32_t OS_Time(void){
   // put Lab 2 (and beyond) solution here
-  return (uint32_t)((double)(OSTimeCounter*1000)/12.5); // replace this line with solution
+  return OSTimeCounter*80; // replace this line with solution
 };
 
 // ******** OS_TimeDifference ************
@@ -662,6 +667,8 @@ void OS_Launch(uint32_t theTimeSlice){
   // put Lab 2 (and beyond) solution here
 	NVIC_ST_RELOAD_R = theTimeSlice - 1;
 	NVIC_ST_CTRL_R = 0X00000007;
+	NVIC_SYS_PRI3_R = (NVIC_SYS_PRI3_R&0xFF00FFFF)|((uint32_t)(7)<<21);
+	NVIC_SYS_PRI3_R = (NVIC_SYS_PRI3_R&0x00FFFFFF)|((uint32_t)(4)<<29);
 	Timer3A_Init(&OS_Time_Increament, TIME_1US, 0);
 	OS_ClearMsTime();
 	headToSleepQueue->next=NULL; // initialize the head pt to queue
