@@ -40,6 +40,9 @@ int32_t MaxJitter;             // largest time jitter between interrupts in usec
 #define ACTIVE 1
 #define SLEEP 2
 #define FifoBufferSize 32
+
+#define PD2  (*((volatile uint32_t *)0x40007010))
+
 uint32_t const JitterSize=JITTERSIZE;
 uint32_t JitterHistogram[JITTERSIZE]={0,};
 uint32_t ElapsedTimerCounter = 0;
@@ -362,6 +365,7 @@ int OS_AddPeriodicThread(void(*task)(void),
  *----------------------------------------------------------------------------*/
 void GPIOPortF_Handler(void){
 	GPIO_PORTF_ICR_R = 0x10;      // acknowledge flag4
+	PD2 ^= 0x04;
 	(*UserSW1Task)();               // execute user task
 }
 
