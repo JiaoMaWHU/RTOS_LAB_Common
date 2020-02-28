@@ -19,6 +19,8 @@
 
 #define CMD_BUFFER_SIZE 128
 
+char cmd_buffer[CMD_BUFFER_SIZE];  // global to assist in debugging
+
 // Print jitter histogram
 void Jitter(int32_t MaxJitter, uint32_t const JitterSize, uint32_t JitterHistogram[]){
   // write this for Lab 3 (the latest)
@@ -106,18 +108,46 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 	}
 }
 
+//---------------------CMD Parser 2 ---------------------
+// Parse the string to specific command and execute it
+// Input: string
+// Output: none
+void Lab2_CMD_Parser(char *cmd_buffer_, uint16_t length){
+	uint16_t id = 0;
+	char * (cmd[4]); // an array of 4 char pointers
+	for(uint16_t i = 0; i<4; i++){
+		cmd[i] = NULL;
+	}
+	cmd[0] = strtok(cmd_buffer_, ",");
+	while(cmd[id]!=NULL && id<4){
+		cmd[++id] = strtok(NULL, ",");
+	}
+	if(!strcmp("help", cmd[0])){
+		Output_Help();
+	}else if(!strcmp("get_metrics", cmd[0])){
+		extern int32_t MaxJitter;
+		extern uint32_t NumCreated;
+		extern uint32_t DataLost;
+		extern uint32_t PIDWork;
+		ST7735_Message(0,4,"Timer-jitter= ",MaxJitter);
+		ST7735_Message(0,5,"Number of Threads= ",NumCreated);
+		ST7735_Message(0,6,"DataPointLost= ",DataLost);
+		ST7735_Message(0,7,"PIDWork= ",PIDWork);
+	}else{
+		UART_OutString("Invalid command"); OutCRLF();
+	}
+}
+
 // *********** Command line interpreter (shell) ************
 void Interpreter(void){ 
-  char cmd_buffer[CMD_BUFFER_SIZE];  // global to assist in debugging
 	memset(cmd_buffer, 0, sizeof(cmd_buffer));
   //uint32_t n;
-	
-	UART_OutString("Welcome to RTOS, enter 'help' to list all the commands."); OutCRLF();
+	UART_OutString("You're using Lab2 interpreter, only 'help' and 'get_metrics' are allowed."); OutCRLF();
 	// starts the loop for 
   while(1){
     UART_OutString("> ");
-    UART_InString(cmd_buffer, CMD_BUFFER_SIZE-1); OutCRLF();
-		CMD_Parser(cmd_buffer, CMD_BUFFER_SIZE);
+    UART_InString(cmd_buffer, 128-1); OutCRLF();
+		Lab2_CMD_Parser(cmd_buffer, 128);
 		memset(cmd_buffer, 0, sizeof(cmd_buffer));
   }
 }

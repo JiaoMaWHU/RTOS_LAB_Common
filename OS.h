@@ -23,6 +23,7 @@
  */      
 #define TIME_1MS    80000          
 #define TIME_2MS    (2*TIME_1MS)  
+#define TIME_10MS   (10*TIME_1MS) 
 #define TIME_500US  (TIME_1MS/2)  
 #define TIME_250US  (TIME_1MS/5) 
 #define TIME_1US  (TIME_1MS/1000) 
