@@ -17,15 +17,14 @@
 #include "../RTOS_Labs_common/eDisk.h"
 #include "../RTOS_Labs_common/eFile.h"
 
-#define CMD_BUFFER_SIZE 128
+#define CMD_BUFFER_SIZE 32
 
 char cmd_buffer[CMD_BUFFER_SIZE];  // global to assist in debugging
 
-// Print jitter histogram
-void Jitter(int32_t MaxJitter, uint32_t const JitterSize, uint32_t JitterHistogram[]){
-  // write this for Lab 3 (the latest)
-	
-}
+extern int32_t MaxJitter;
+extern uint32_t NumCreated;
+extern uint32_t DataLost;
+extern uint32_t PIDWork;
 
 //---------------------OutCRLF---------------------
 // Output a CR,LF to UART to go to a new line
@@ -34,6 +33,22 @@ void Jitter(int32_t MaxJitter, uint32_t const JitterSize, uint32_t JitterHistogr
 void OutCRLF(void){
   UART_OutChar(CR);
   UART_OutChar(LF);
+}
+
+// Print jitter histogram
+void Jitter1(int32_t MaxJitter, uint32_t const JitterSize, uint32_t JitterHistogram[]){
+	UART_OutString("Jitter for A:"); OutCRLF();
+	UART_OutString("MaxJitter: "); UART_OutUDec(MaxJitter); OutCRLF();
+	UART_OutString("JitterSize: "); UART_OutUDec(JitterSize); OutCRLF();
+	for(uint32_t i = 0; i<JitterSize; i++){
+		UART_OutUDec(i); UART_OutChar(' '); UART_OutUDec(JitterHistogram[i]);OutCRLF();
+	}
+	OutCRLF();
+}
+
+void Jitter2(int32_t MaxJitter, uint32_t const JitterSize, uint32_t JitterHistogram[]){
+  // write this for Lab 3 (the latest)
+	
 }
 
 //---------------------Output help instructions---------------------
@@ -49,7 +64,7 @@ void Output_Help(void){
 	UART_OutString("adc_get: output the value of adc"); OutCRLF(); OutCRLF();
 	UART_OutString("clr_ms: clear the time counter and start counting"); OutCRLF(); OutCRLF();
 	UART_OutString("get_ms: output the time counter"); OutCRLF(); OutCRLF();
-	UART_OutString("get_metrics: output the performance metrics"); OutCRLF(); OutCRLF();
+	UART_OutString("get_metrics: output the performance metrics, use it only in Lab2"); OutCRLF(); OutCRLF();
 }
 
 //---------------------Call lcd function---------------------
@@ -103,32 +118,7 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 	}else if(!strcmp("get_ms", cmd[0])){
 		UART_OutString("Counter: "); 
 		UART_OutUDec(OS_MsTime()); OutCRLF();
-	}else{
-		UART_OutString("Invalid command"); OutCRLF();
-	}
-}
-
-//---------------------CMD Parser 2 ---------------------
-// Parse the string to specific command and execute it
-// Input: string
-// Output: none
-void Lab2_CMD_Parser(char *cmd_buffer_, uint16_t length){
-	uint16_t id = 0;
-	char * (cmd[4]); // an array of 4 char pointers
-	for(uint16_t i = 0; i<4; i++){
-		cmd[i] = NULL;
-	}
-	cmd[0] = strtok(cmd_buffer_, ",");
-	while(cmd[id]!=NULL && id<4){
-		cmd[++id] = strtok(NULL, ",");
-	}
-	if(!strcmp("help", cmd[0])){
-		Output_Help();
 	}else if(!strcmp("get_metrics", cmd[0])){
-		extern int32_t MaxJitter;
-		extern uint32_t NumCreated;
-		extern uint32_t DataLost;
-		extern uint32_t PIDWork;
 		ST7735_Message(0,4,"Timer-jitter= ",MaxJitter);
 		ST7735_Message(0,5,"Number of Threads= ",NumCreated);
 		ST7735_Message(0,6,"DataPointLost= ",DataLost);
@@ -142,12 +132,12 @@ void Lab2_CMD_Parser(char *cmd_buffer_, uint16_t length){
 void Interpreter(void){ 
 	memset(cmd_buffer, 0, sizeof(cmd_buffer));
   //uint32_t n;
-	UART_OutString("You're using Lab2 interpreter, only 'help' and 'get_metrics' are allowed."); OutCRLF();
+	UART_OutString("Welcome to Interpreter, use 'help'."); OutCRLF();
 	// starts the loop for 
   while(1){
     UART_OutString("> ");
-    UART_InString(cmd_buffer, 128-1); OutCRLF();
-		Lab2_CMD_Parser(cmd_buffer, 128);
+    UART_InString(cmd_buffer, CMD_BUFFER_SIZE-1); OutCRLF();
+		CMD_Parser(cmd_buffer, CMD_BUFFER_SIZE);
 		memset(cmd_buffer, 0, sizeof(cmd_buffer));
   }
 }

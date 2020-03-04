@@ -32,7 +32,8 @@ void StartOS(void);
 void ContextSwitch(void);
 
 // Performance Measurements 
-int32_t MaxJitter;             // largest time jitter between interrupts in usec
+int32_t MaxJitter = 0;             // largest time jitter between interrupts in usec
+int32_t MaxJitter2 = 0;
 #define JITTERSIZE 64
 #define NUMTHREAD 32
 #define STACKSIZE 128
@@ -45,6 +46,7 @@ int32_t MaxJitter;             // largest time jitter between interrupts in usec
 
 uint32_t const JitterSize=JITTERSIZE;
 uint32_t JitterHistogram[JITTERSIZE]={0,};
+uint32_t JitterHistogram2[JITTERSIZE]={0,};
 uint32_t ElapsedTimerCounter = 0;
 uint32_t OSTimeCounter = 0;
 
