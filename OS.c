@@ -40,6 +40,7 @@ int32_t MaxJitter;             // largest time jitter between interrupts in usec
 #define ACTIVE 1
 #define SLEEP 2
 #define FifoBufferSize 32
+#define TASKSLOT 8
 
 #define PD2  (*((volatile uint32_t *)0x40007010))
 
@@ -56,6 +57,10 @@ Sema4Type CurrentFifoSize; // semaphore for mutex in OS_FIFO
 uint32_t FifoBuffer[FifoBufferSize];
 uint32_t inFifoId;
 uint32_t outFifoId;
+
+void (*fun_ptr_arr[TASKSLOT])(void);
+uint32_t periodCounter = 0;
+uint32_t periodicTasksPeriod[TASKSLOT];
 
 struct tcb{
   int32_t *sp;       // pointer to stack (valid for threads not running
@@ -220,6 +225,7 @@ void OS_bWait(Sema4Type *semaPt){
 	DisableInterrupts(); 
 	while((semaPt->Value) == 0){
 		EnableInterrupts();
+		OS_Suspend();
 		DisableInterrupts();
 	}
 	semaPt->Value = 0;
@@ -331,6 +337,29 @@ uint32_t OS_Id(void){
   return RunPt->id; // replace this line with solution
 };
 
+//******** AddPeriodicTaskHelper *************** 
+// add a priority task to the function pointer array and initialize
+// corresponding period in periodicTasksPeriod array.
+// Inputs: task pointer, period, priority
+// Outputs: None
+void AddPeriodicTaskHelper(void(*task)(void), uint32_t period, uint32_t priority) {
+	fun_ptr_arr[priority] = task;
+	periodicTasksPeriod[priority] = (period / TIME_1US) - 1;
+}
+
+//******** periodicTask_Handler *************** 
+// increment period counter and excutes a task when it is time
+// Inputs: task pointer, period, priority
+// Outputs: None
+void PeriodicTask_Handler(void) {
+	periodCounter++;
+	for (int i = 0; i < TASKSLOT; i++) {
+		if (fun_ptr_arr[i] != NULL && (periodCounter % periodicTasksPeriod[i] == 0)) {
+			(*fun_ptr_arr[i])();
+		}
+	}
+}
+
 
 //******** OS_AddPeriodicThread *************** 
 // add a background periodic task
@@ -353,8 +382,8 @@ uint32_t OS_Id(void){
 int OS_AddPeriodicThread(void(*task)(void), 
    uint32_t period, uint32_t priority){
   // put Lab 2 (and beyond) solution here
-  Timer4A_Init(task, period, priority); // period per ms sampling
-  return 0; // replace this line with solution
+	AddPeriodicTaskHelper(task, period, priority);
+  return 1; // replace this line with solution
 };
 
 
@@ -674,6 +703,11 @@ void OS_Launch(uint32_t theTimeSlice){
 	NVIC_SYS_PRI3_R = (NVIC_SYS_PRI3_R&0xFF00FFFF)|((uint32_t)(7)<<21);
 	NVIC_SYS_PRI3_R = (NVIC_SYS_PRI3_R&0x00FFFFFF)|((uint32_t)(4)<<29);
 	Timer3A_Init(&OS_Time_Increament, TIME_1US, 0);
+	Timer4A_Init(&PeriodicTask_Handler, TIME_1US, 1); // initialize periodic increament for background thread
+	for (int i = 0; i < TASKSLOT; i++) {
+		fun_ptr_arr[i] = NULL;
+		periodicTasksPeriod[i] = 0;
+	}
 	OS_ClearMsTime();
 	headToSleepQueue->next=NULL; // initialize the head pt to queue
 	headToSleepQueue->prior=NULL; // initialize the head pt to queue
