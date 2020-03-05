@@ -134,6 +134,9 @@ uint32_t OS_Id(void);
 int OS_AddPeriodicThread(void(*task)(void), 
    uint32_t period, uint32_t priority);
 
+void ComputeJitterA(long PERIOD);
+void ComputeJitterB(long PERIOD);
+
 //******** OS_AddSW1Task *************** 
 // add a background task to run whenever the SW1 (PF4) button is pushed
 // Inputs: pointer to a void/void background function

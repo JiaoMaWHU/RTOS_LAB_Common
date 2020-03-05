@@ -41,14 +41,19 @@ void Jitter1(int32_t MaxJitter, uint32_t const JitterSize, uint32_t JitterHistog
 	UART_OutString("MaxJitter: "); UART_OutUDec(MaxJitter); OutCRLF();
 	UART_OutString("JitterSize: "); UART_OutUDec(JitterSize); OutCRLF();
 	for(uint32_t i = 0; i<JitterSize; i++){
-		UART_OutUDec(i); UART_OutChar(' '); UART_OutUDec(JitterHistogram[i]);OutCRLF();
+		UART_OutUDec(i); UART_OutChar(' '); UART_OutUDec(JitterHistogram[i]); OutCRLF();
 	}
 	OutCRLF();
 }
 
 void Jitter2(int32_t MaxJitter, uint32_t const JitterSize, uint32_t JitterHistogram[]){
-  // write this for Lab 3 (the latest)
-	
+  UART_OutString("Jitter for B:"); OutCRLF();
+	UART_OutString("MaxJitter: "); UART_OutUDec(MaxJitter); OutCRLF();
+	UART_OutString("JitterSize: "); UART_OutUDec(JitterSize); OutCRLF();
+	for(uint32_t i = 0; i<JitterSize; i++){
+		UART_OutUDec(i); UART_OutChar(' '); UART_OutUDec(JitterHistogram[i]); OutCRLF();
+	}
+	OutCRLF();
 }
 
 //---------------------Output help instructions---------------------

@@ -43,7 +43,6 @@ int32_t MaxJitter2 = 0;
 #define FifoBufferSize 32
 #define TASKSLOT 8
 
-#define PD2  (*((volatile uint32_t *)0x40007010))
 
 uint32_t const JitterSize=JITTERSIZE;
 uint32_t JitterHistogram[JITTERSIZE]={0,};
@@ -170,6 +169,10 @@ void OS_Init(void){
 	UART_Init();
 	ST7735_InitR(INITR_REDTAB); // LCD initialization
 	PLL_Init(Bus80MHz);         // set processor clock to 80 MHz
+	for (int i = 0; i < TASKSLOT; i++) {
+		fun_ptr_arr[i] = NULL;
+		periodicTasksPeriod[i] = 0;
+	}
 }; 
 
 
@@ -346,7 +349,7 @@ uint32_t OS_Id(void){
 // Outputs: None
 void AddPeriodicTaskHelper(void(*task)(void), uint32_t period, uint32_t priority) {
 	fun_ptr_arr[priority] = task;
-	periodicTasksPeriod[priority] = (period / TIME_1US) - 1;
+	periodicTasksPeriod[priority] = (period / TIME_500US);
 }
 
 //******** periodicTask_Handler *************** 
@@ -356,8 +359,8 @@ void AddPeriodicTaskHelper(void(*task)(void), uint32_t period, uint32_t priority
 void PeriodicTask_Handler(void) {
 	periodCounter++;
 	for (int i = 0; i < TASKSLOT; i++) {
-		if (fun_ptr_arr[i] != NULL && (periodCounter % periodicTasksPeriod[i] == 0)) {
-			(*fun_ptr_arr[i])();
+		if (fun_ptr_arr[i] != NULL && ((periodCounter % periodicTasksPeriod[i]) == 0)) {
+			(*(fun_ptr_arr[i]))();
 		}
 	}
 }
@@ -388,7 +391,59 @@ int OS_AddPeriodicThread(void(*task)(void),
   return 1; // replace this line with solution
 };
 
+/*-----------------------------
+Jitter for work A
+--------------------------------*/
+void ComputeJitterA(long PERIOD){
+	unsigned static long LastTimeA;  // time at previous ADC sample
+	uint32_t static TimeArunN = 0;  // time at previous ADC sample
+  long thisTime = OS_Time();              // time at current ADC sample
+	if(TimeArunN>0){
+		long jitter;
+		uint32_t diff = OS_TimeDifference(LastTimeA,thisTime);
+		if(diff>PERIOD){
+			jitter = (diff-PERIOD+4)/8;  // in 0.1 usec
+		}else{
+			jitter = (PERIOD-diff+4)/8;  // in 0.1 usec
+		}
+		if(jitter > MaxJitter){
+			MaxJitter = jitter; // in usec
+		}       // jitter should be 0
+		if(jitter >= JitterSize){
+			jitter = JitterSize-1;
+		}
+		JitterHistogram[jitter]++; 
+	}
+	TimeArunN++;
+	LastTimeA = thisTime;
+}
 
+/*-----------------------------
+Jitter for work B
+--------------------------------*/
+void ComputeJitterB(long PERIOD){
+	unsigned static long LastTimeB;  // time at previous ADC sample
+	uint32_t static TimeBrunN = 0;  // time at previous ADC sample
+  long thisTime = OS_Time();              // time at current ADC sample
+	if(TimeBrunN>0){
+		long jitter;
+		uint32_t diff = OS_TimeDifference(LastTimeB,thisTime);
+		if(diff>PERIOD){
+			jitter = (diff-PERIOD+4)/8;  // in 0.1 usec
+		}else{
+			jitter = (PERIOD-diff+4)/8;  // in 0.1 usec
+		}
+		if(jitter > MaxJitter2){
+			MaxJitter2 = jitter; // in usec
+		}       // jitter should be 0
+		if(jitter >= JitterSize){
+			jitter = JitterSize-1;
+		}
+		JitterHistogram2[jitter]++; 
+	}
+	TimeBrunN++;
+	LastTimeB = thisTime;
+}
 
 
 /*----------------------------------------------------------------------------
@@ -396,7 +451,6 @@ int OS_AddPeriodicThread(void(*task)(void),
  *----------------------------------------------------------------------------*/
 void GPIOPortF_Handler(void){
 	GPIO_PORTF_ICR_R = 0x10;      // acknowledge flag4
-	PD2 ^= 0x04;
 	(*UserSW1Task)();               // execute user task
 }
 
@@ -705,11 +759,7 @@ void OS_Launch(uint32_t theTimeSlice){
 	NVIC_SYS_PRI3_R = (NVIC_SYS_PRI3_R&0xFF00FFFF)|((uint32_t)(7)<<21);
 	NVIC_SYS_PRI3_R = (NVIC_SYS_PRI3_R&0x00FFFFFF)|((uint32_t)(4)<<29);
 	Timer3A_Init(&OS_Time_Increament, TIME_1US, 0);
-	Timer4A_Init(&PeriodicTask_Handler, TIME_1US, 1); // initialize periodic increament for background thread
-	for (int i = 0; i < TASKSLOT; i++) {
-		fun_ptr_arr[i] = NULL;
-		periodicTasksPeriod[i] = 0;
-	}
+	Timer4A_Init(&PeriodicTask_Handler, TIME_500US, 1); // initialize periodic increament for background thread
 	OS_ClearMsTime();
 	headToSleepQueue->next=NULL; // initialize the head pt to queue
 	headToSleepQueue->prior=NULL; // initialize the head pt to queue
