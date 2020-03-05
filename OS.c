@@ -451,13 +451,12 @@ void ComputeJitterB(long PERIOD){
   PF1/4? Interrupt Handler
  *----------------------------------------------------------------------------*/
 void GPIOPortF_Handler(void){
-	PD2 ^= 0x04;
-	if(GPIO_PORTF_RIS_R&0x01){  // triggered by switch 2
-		GPIO_PORTF_ICR_R = 0x01;  // acknowledge flag0
+	if(GPIO_PORTF_RIS_R&0x10){  // triggered by switch 1
+		GPIO_PORTF_ICR_R = 0x10;  // acknowledge flag4
 		(*UserSW1Task)(); 
   }
-  if(GPIO_PORTF_RIS_R&0x10){  // triggered by switch 1
-    GPIO_PORTF_ICR_R = 0x10;  // acknowledge flag4
+  if(GPIO_PORTF_RIS_R&0x01){  // triggered by switch 2
+    GPIO_PORTF_ICR_R = 0x01;  // acknowledge flag0
 		(*UserSW2Task)();               // execute user task
   }
 }
@@ -514,11 +513,13 @@ int OS_AddSW2Task(void(*task)(void), uint32_t priority){
 	UserSW2Task = task; // user function
   SYSCTL_RCGCGPIO_R |= 0x00000020; // (a) activate clock for port F
 //  FallingEdges = 0;             // (b) initialize counter
+	GPIO_PORTF_LOCK_R = 0x4C4F434B; // unlock GPIO Port F
+	GPIO_PORTF_CR_R |= 0x01;         // allow changes to PF4,0
   GPIO_PORTF_DIR_R &= ~0x01;    // (c) make PF0 in (built-in button)
   GPIO_PORTF_AFSEL_R &= ~0x01;  //     disable alt funct on PF0
   GPIO_PORTF_DEN_R |= 0x01;     //     enable digital I/O on PF0   
   GPIO_PORTF_PCTL_R &= ~0x0000000F; // configure PF0 as GPIO
-  GPIO_PORTF_AMSEL_R = 0;       //     disable analog functionality on PF
+  GPIO_PORTF_AMSEL_R &= ~0x01;       //     disable analog functionality on PF
   GPIO_PORTF_PUR_R |= 0x01;     //     enable weak pull-up on PF0
   GPIO_PORTF_IS_R &= ~0x01;     // (d) PF0 is edge-sensitive
   GPIO_PORTF_IBE_R &= ~0x01;    //     PF0 is not both edges
