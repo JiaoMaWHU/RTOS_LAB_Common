@@ -63,6 +63,11 @@ void (*fun_ptr_arr[TASKSLOT])(void);
 uint32_t periodCounter = 0;
 uint32_t periodicTasksPeriod[TASKSLOT];
 
+uint32_t PreISRDisableTime;
+uint32_t MaxISRDisableTime;
+uint32_t TotalISRDisableTime;
+
+
 struct tcb{
   int32_t *sp;       // pointer to stack (valid for threads not running
 	struct tcb *next;  // linked-list pointer
@@ -451,7 +456,6 @@ void ComputeJitterB(long PERIOD){
   PF1/4? Interrupt Handler
  *----------------------------------------------------------------------------*/
 void GPIOPortF_Handler(void){
-	PD2 ^= 0x04;
 	if(GPIO_PORTF_RIS_R&0x01){  // triggered by switch 2
 		GPIO_PORTF_ICR_R = 0x01;  // acknowledge flag0
 		(*UserSW1Task)(); 
@@ -766,6 +770,29 @@ uint32_t OS_MsTime(void){
   return ElapsedTimerCounter;
 };
 
+// ******** OS_PreISRDisableTime ************
+// reads the current time counter in Timer 5 GPTMTAR), register
+// Inputs:  none
+// Outputs: none
+void OS_PreDisableISRTime(void){
+  // put Lab 1 solution here
+  PreISRDisableTime = TIMER5_TAR_R;
+};
+
+// ******** OS_PostISRDisableTime ************
+// calculate the system time interval during the interrupt disable
+// update max system time and total system time during intterupt disable
+// Inputs:  none
+// Outputs: none
+void OS_PostDisableISRTime(void) {
+	// each uint in 1ms/80000
+	uint32_t timeDiff = TIMER5_TAR_R - PreISRDisableTime;
+	TotalISRDisableTime += timeDiff;
+	if (timeDiff > MaxISRDisableTime) {
+		MaxISRDisableTime = timeDiff;
+	}
+}
+
 
 //******** OS_Launch *************** 
 // start the scheduler, enable interrupts
@@ -786,6 +813,9 @@ void OS_Launch(uint32_t theTimeSlice){
 	OS_ClearMsTime();
 	headToSleepQueue->next=NULL; // initialize the head pt to queue
 	headToSleepQueue->prior=NULL; // initialize the head pt to queue
+	PreISRDisableTime = 0;
+	MaxISRDisableTime = 0;
+	TotalISRDisableTime = 0;
 	StartOS(); // start on the first task
 };
 
