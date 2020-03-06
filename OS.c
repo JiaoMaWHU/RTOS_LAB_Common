@@ -40,6 +40,7 @@ int32_t MaxJitter2 = 0;
 #define RUN 0
 #define ACTIVE 1
 #define SLEEP 2
+#define BLOCK 3
 #define FifoBufferSize 32
 #define TASKSLOT 8
 
@@ -63,17 +64,6 @@ void (*fun_ptr_arr[TASKSLOT])(void);
 uint32_t periodCounter = 0;
 uint32_t periodicTasksPeriod[TASKSLOT];
 
-struct tcb{
-  int32_t *sp;       // pointer to stack (valid for threads not running
-	struct tcb *next;  // linked-list pointer
-	struct tcb *prior;  // linked-list pointer
-  uint32_t id;				 // id for the current thread
-	uint32_t sleepCounter;		 // sleep state of the thread, used for suspension
-	uint32_t priority;	 // the priority of the current thread (lab 3)
-	uint32_t state;  // current state of the thread
-};
-
-typedef struct tcb tcbType; // meaning replace "struct tcb" with tcbType
 tcbType tcbs[NUMTHREAD];
 tcbType *RunPt = NULL;
 tcbType *TailPt = NULL;
@@ -91,6 +81,42 @@ int32_t restoreTcbStackPt = -1;
 void (*UserSW1Task)(void);   // user function
 void (*UserSW2Task)(void);   // user function
 
+void OS_InsertTcbRound(tcbType* taget_node){
+	// make sure interrupt has already been disabled
+	// insert after tailnode
+	if(TailPt==NULL){ // tailpt and runpt all null, means the only thread in OS
+		RunPt=taget_node;
+		TailPt=taget_node;
+		TailPt->next = TailPt;
+		TailPt->prior = TailPt;
+	}else{
+		taget_node->next = TailPt->next;
+		TailPt->next->prior = taget_node;
+		TailPt->next = taget_node;
+		taget_node->prior = TailPt;
+		TailPt = TailPt->next;
+	}
+	taget_node->state = ACTIVE;
+}
+
+void OS_removeTcbRound(void){
+	// make sure interrupt has already been disabled
+	if(TailPt==RunPt){
+		TailPt = RunPt->next;
+	}
+	RunPt->next->prior = RunPt->prior;
+	RunPt->prior->next = RunPt->next;
+}
+
+void OS_InsertTcbPriority(tcbType* taget_node){
+	// make sure interrupt has already been disabled
+}
+
+void OS_removeTcbPriority(tcbType* taget_node){
+	// make sure interrupt has already been disabled
+}
+
+
 /*------------------------
 	traverse the queue of sleeping threads
 	decrease the time count
@@ -102,7 +128,6 @@ void traverseSleepQueue(void){
 	while(tmpQueueNode!=NULL){
 		tmpQueueNode->sleepCounter -= 1;
 		if(tmpQueueNode->sleepCounter==0){
-			tmpQueueNode->state = ACTIVE;
 			tcbType* originNext = tmpQueueNode->next; // reserved for next loop
 			// remove pt from queue
 			// tail or head or center or only one
@@ -111,18 +136,7 @@ void traverseSleepQueue(void){
 				tmpQueueNode->next->prior = tmpQueueNode->prior;
 			}
 			// insert after tailnode
-			if(TailPt==NULL){ // tailpt and runpt all null, means the only thread in OS
-				RunPt=tmpQueueNode;
-				TailPt=tmpQueueNode;
-				TailPt->next = TailPt;
-				TailPt->prior = TailPt;
-			}else{
-				tmpQueueNode->next = TailPt->next;
-				TailPt->next->prior = tmpQueueNode;
-				TailPt->next = tmpQueueNode;
-				tmpQueueNode->prior = TailPt;
-				TailPt = TailPt->next;
-			}
+			OS_InsertTcbRound(tmpQueueNode);
 			tmpQueueNode = originNext;
 		}else{
 			tmpQueueNode = tmpQueueNode->next;
@@ -184,9 +198,10 @@ void OS_Init(void){
 // output: none
 void OS_InitSemaphore(Sema4Type *semaPt, int32_t value){
   // put Lab 2 (and beyond) solution here
-	DisableInterrupts();
+	uint32_t status = StartCritical(); //disable interrupt
 	semaPt->Value = value;
-	EnableInterrupts();
+	semaPt->tcbP = NULL;
+	EndCritical(status);
 }; 
 
 // ******** OS_Wait ************
@@ -197,14 +212,14 @@ void OS_InitSemaphore(Sema4Type *semaPt, int32_t value){
 // output: none
 void OS_Wait(Sema4Type *semaPt){
   // put Lab 2 (and beyond) solution here
-  DisableInterrupts(); 
-	while((semaPt->Value) <= 0){
-		EnableInterrupts();
-		OS_Suspend();
-		DisableInterrupts();
-	}
+	uint32_t status = StartCritical(); //disable interrupt
 	semaPt->Value -= 1;
-  EnableInterrupts();
+	if(semaPt->Value<=0){
+		RunPt->state = BLOCK;
+		RunPt->blockSemaPt = semaPt;
+		OS_Suspend();
+	}
+  EndCritical(status);
 }; 
 
 // ******** OS_Signal ************
@@ -215,9 +230,19 @@ void OS_Wait(Sema4Type *semaPt){
 // output: none
 void OS_Signal(Sema4Type *semaPt){
   // put Lab 2 (and beyond) solution here
-	long status;
-	status = StartCritical(); 
+	long status = StartCritical(); 
 	semaPt->Value += 1; 
+	if(semaPt->Value<=0){
+		tcbType* tmpPt = NULL;
+		tmpPt = semaPt->tcbP;
+		if(semaPt->tcbP->next!=NULL){
+			semaPt->tcbP = semaPt->tcbP->next;
+		}else{
+			semaPt->tcbP = NULL;
+		}
+		OS_InsertTcbRound(tmpPt);
+		tmpPt = NULL;
+	}
 	EndCritical(status);
 }; 
 
@@ -279,6 +304,19 @@ void OS_SetInitialStack(int i){
 // Outputs: none
 // move RunPtr to the next thread
 void OS_RunPtrScheduler(void){
+	if(RunPt->state==BLOCK){
+		tcbType* headPt = RunPt->blockSemaPt->tcbP;
+		if(headPt==NULL){
+			RunPt->blockSemaPt->tcbP = RunPt;
+		}else{
+			while(headPt->next!=NULL){
+				headPt = headPt->next;
+			}
+			headPt->next = RunPt;
+		}
+		OS_removeTcbRound();
+		RunPt->next = NULL;
+	}
 	RunPt = NextPt;
 	RunPt->state = RUN;
 }
@@ -309,27 +347,27 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 		}
 		threadIdMax++;
 	}
-	if (TailPt==NULL) {												// initialization
-		tcbs[threadID].next = &tcbs[threadID]; // set first node pointing to itself
-		tcbs[threadID].prior = &tcbs[threadID];
-		RunPt = &tcbs[threadID]; 							// initiate first task
-		TailPt = &tcbs[threadID]; 							// initiate tail node
-	} else {
-		tcbType* orginNext = TailPt -> next;	// store the origin next node
-		TailPt -> next = &tcbs[threadID]; 	// current node.next point to new node
-		tcbs[threadID].next = orginNext; 	// new node.next points to origin next
-		tcbs[threadID].prior = TailPt;
-		orginNext->prior = &tcbs[threadID];
-		orginNext = NULL; // clear tmp pointer
-		TailPt = TailPt->next;
-	}
+//	if (TailPt==NULL) {												// initialization
+//		tcbs[threadID].next = &tcbs[threadID]; // set first node pointing to itself
+//		tcbs[threadID].prior = &tcbs[threadID];
+//		RunPt = &tcbs[threadID]; 							// initiate first task
+//		TailPt = &tcbs[threadID]; 							// initiate tail node
+//	} else {
+//		tcbType* orginNext = TailPt -> next;	// store the origin next node
+//		TailPt -> next = &tcbs[threadID]; 	// current node.next point to new node
+//		tcbs[threadID].next = orginNext; 	// new node.next points to origin next
+//		tcbs[threadID].prior = TailPt;
+//		orginNext->prior = &tcbs[threadID];
+//		orginNext = NULL; // clear tmp pointer
+//		TailPt = TailPt->next;
+//	}
 	tcbs[threadID].id = threadID;			  // set the id field of the node
 	tcbs[threadID].priority = priority;  // set the priority field of the node
-	tcbs[threadID].state = ACTIVE;
+	tcbs[threadID].blockSemaPt = NULL;
 	OS_SetInitialStack(threadID); 
 	Stacks[threadID][STACKSIZE-2] = (int32_t)(task); // PC
+	OS_InsertTcbRound(&tcbs[threadID]);
 	threadID++;	// increment thread id for future new threads
-	
   EndCritical(status);   
   return 1; // replace this line with solution
 };
@@ -545,11 +583,12 @@ void OS_Sleep(uint32_t sleepTime){
 	RunPt->state = SLEEP;
 	
 	// remove from tcb cycles
-	if(TailPt==RunPt){
-		TailPt = RunPt->next;
-	}
-	RunPt->next->prior = RunPt->prior;
-	RunPt->prior->next = RunPt->next;
+//	if(TailPt==RunPt){
+//		TailPt = RunPt->next;
+//	}
+//	RunPt->next->prior = RunPt->prior;
+//	RunPt->prior->next = RunPt->next;
+	OS_removeTcbRound();
 	
 	// insert into queue
 	RunPt->next = headToSleepQueue->next;
@@ -571,12 +610,7 @@ void OS_Kill(void){
 	DisableInterrupts();
 	NextPt = RunPt -> next;
 	
-	if(TailPt==RunPt){
-		TailPt = RunPt->next;
-	}
-	
-	RunPt->next->prior = RunPt->prior;
-	RunPt->prior->next = RunPt->next;
+	OS_removeTcbRound();
 	
 	restoreTcbStackPt++;
 	restoredTcbStack[restoreTcbStackPt] = RunPt->id;
