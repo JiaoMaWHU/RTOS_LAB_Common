@@ -25,6 +25,9 @@ extern int32_t MaxJitter;
 extern uint32_t NumCreated;
 extern uint32_t DataLost;
 extern uint32_t PIDWork;
+extern uint32_t PreISRDisableTime;
+extern uint32_t MaxISRDisableTime;
+extern uint32_t TotalISRDisableTime;
 
 //---------------------OutCRLF---------------------
 // Output a CR,LF to UART to go to a new line
@@ -128,6 +131,15 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		ST7735_Message(0,5,"Number of Threads= ",NumCreated);
 		ST7735_Message(0,6,"DataPointLost= ",DataLost);
 		ST7735_Message(0,7,"PIDWork= ",PIDWork);
+	}else if(!strcmp("get_systime", cmd[0])){
+		UART_OutString("Max System Time during ISR disabled is: "); 
+		UART_OutUDec(MaxISRDisableTime);OutCRLF();
+		UART_OutString("Total System Time during ISR disabled is: "); 
+		UART_OutUDec(TotalISRDisableTime);OutCRLF();        
+	}else if(!strcmp("reset_systime", cmd[0])){
+		MaxISRDisableTime = 0;
+		TotalISRDisableTime = 0;
+		UART_OutString("Finished"); OutCRLF();
 	}else{
 		UART_OutString("Invalid command"); OutCRLF();
 	}

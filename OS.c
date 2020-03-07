@@ -78,44 +78,123 @@ tcbType* headToSleepQueue = &dummyHeadOfQueue; // store the pointer for sleep tc
 int32_t restoredTcbStack[NUMTHREAD];
 int32_t restoreTcbStackPt = -1;
 
+tcbType *HeadPt = NULL;
+
+uint32_t PreISRDisableTime;
+uint32_t MaxISRDisableTime;
+uint32_t TotalISRDisableTime;
+
 void (*UserSW1Task)(void);   // user function
 void (*UserSW2Task)(void);   // user function
 
-void OS_InsertTcbRound(tcbType* taget_node){
+// ******** OS_PreISRDisableTime ************
+// reads the current time counter in Timer 5 GPTMTAR), register
+// Inputs:  none
+// Outputs: none
+void OS_PreDisableISRTime(void){
+  // put Lab 1 solution here
+	// Timer 5 has been enabled
+	if (SYSCTL_RCGCTIMER_R >> 5 == 0x01) {
+	  PreISRDisableTime = TIMER5_TAR_R;
+	}
+};
+
+// ******** OS_PostISRDisableTime ************
+// calculate the system time interval during the interrupt disable
+// update max system time and total system time during intterupt disable
+// Inputs:  none
+// Outputs: none
+void OS_PostDisableISRTime(void) {
+	// each uint in 1ms/80000
+	uint32_t timeDiff = 0;
+	if (SYSCTL_RCGCTIMER_R >> 5 == 0x01) {
+		uint32_t curTime = TIMER5_TAR_R;
+		uint32_t readTair = TIMER5_TAILR_R;
+		if (curTime <= PreISRDisableTime) {
+		  timeDiff = PreISRDisableTime - curTime;
+		} else {
+			timeDiff = TIMER5_TAILR_R - curTime + PreISRDisableTime;
+		}
+	}
+	TotalISRDisableTime += timeDiff;
+	if (timeDiff > MaxISRDisableTime) {
+		MaxISRDisableTime = timeDiff;
+	}
+}
+
+//void OS_InsertTcbRound(tcbType* taget_node){
+//	// make sure interrupt has already been disabled
+//	// insert after tailnode
+//	if(TailPt==NULL){ // tailpt and runpt all null, means the only thread in OS
+//		RunPt=taget_node;
+//		TailPt=taget_node;
+//		TailPt->next = TailPt;
+//		TailPt->prior = TailPt;
+//	}else{
+//		taget_node->next = TailPt->next;
+//		TailPt->next->prior = taget_node;
+//		TailPt->next = taget_node;
+//		taget_node->prior = TailPt;
+//		TailPt = TailPt->next;
+//	}
+//	taget_node->state = ACTIVE;
+//}
+
+//void OS_removeTcbRound(void){
+//	// make sure interrupt has already been disabled
+//	if(TailPt==RunPt){
+//		TailPt = RunPt->next;
+//	}
+//	RunPt->next->prior = RunPt->prior;
+//	RunPt->prior->next = RunPt->next;
+//}
+
+void insertPriorityHelper(tcbType** head_node, tcbType* target_node){
 	// make sure interrupt has already been disabled
-	// insert after tailnode
-	if(TailPt==NULL){ // tailpt and runpt all null, means the only thread in OS
-		RunPt=taget_node;
-		TailPt=taget_node;
-		TailPt->next = TailPt;
-		TailPt->prior = TailPt;
+	if(*head_node==NULL){
+		*head_node=target_node;
+		(*head_node)->next = NULL;
+		(*head_node)->prior = NULL;
 	}else{
-		taget_node->next = TailPt->next;
-		TailPt->next->prior = taget_node;
-		TailPt->next = taget_node;
-		taget_node->prior = TailPt;
-		TailPt = TailPt->next;
+		tcbType* next_node = (*head_node), *old_node = NULL;
+		while(next_node!=NULL && next_node->priority <= target_node->priority){
+			old_node = next_node;
+			next_node = next_node->next;
+		}
+		if(next_node==(*head_node)){
+			(*head_node) = target_node;
+			target_node->next = next_node;
+			target_node->prior = NULL;
+			next_node->prior = target_node;
+		}else if(next_node==NULL){
+			// last node in the list
+			old_node->next = target_node;
+			target_node->next = NULL;
+			target_node->prior = old_node;
+		}else{
+			target_node->next = old_node->next;
+			target_node->prior = old_node;
+			next_node->prior = target_node;
+			old_node->next = target_node;
+		}
+		next_node = NULL;
+		old_node = NULL;
 	}
-	taget_node->state = ACTIVE;
 }
 
-void OS_removeTcbRound(void){
-	// make sure interrupt has already been disabled
-	if(TailPt==RunPt){
-		TailPt = RunPt->next;
+void removePriorityHelper(tcbType** head_node, tcbType* target_node){
+	if((*head_node)==target_node){
+		(*head_node) = (*head_node)->next;
+		if((*head_node)!=NULL){
+			(*head_node)->prior = NULL;
+		}
+	}else{
+		target_node->prior->next = target_node->next;
+		target_node->next->prior = target_node->prior;
+		target_node->next = NULL;
+		target_node->prior = NULL;
 	}
-	RunPt->next->prior = RunPt->prior;
-	RunPt->prior->next = RunPt->next;
 }
-
-void OS_InsertTcbPriority(tcbType* taget_node){
-	// make sure interrupt has already been disabled
-}
-
-void OS_removeTcbPriority(tcbType* taget_node){
-	// make sure interrupt has already been disabled
-}
-
 
 /*------------------------
 	traverse the queue of sleeping threads
@@ -136,7 +215,7 @@ void traverseSleepQueue(void){
 				tmpQueueNode->next->prior = tmpQueueNode->prior;
 			}
 			// insert after tailnode
-			OS_InsertTcbRound(tmpQueueNode);
+			insertPriorityHelper(&HeadPt, tmpQueueNode);
 			tmpQueueNode = originNext;
 		}else{
 			tmpQueueNode = tmpQueueNode->next;
@@ -152,7 +231,7 @@ void traverseSleepQueue(void){
   used for preemptive thread switch
  *------------------------------------------------------------------------------*/
 void SysTick_Handler(void) {
-	NextPt = RunPt->next;
+	NextPt = HeadPt;
 	traverseSleepQueue();
 	ContextSwitch();
 } // end SysTick_Handler
@@ -188,6 +267,13 @@ void OS_Init(void){
 		fun_ptr_arr[i] = NULL;
 		periodicTasksPeriod[i] = 0;
 	}
+	headToSleepQueue->next=NULL; // initialize the head pt to queue
+	headToSleepQueue->prior=NULL; // initialize the head pt to queue
+	HeadPt->next = NULL;
+	HeadPt->prior = NULL;
+	PreISRDisableTime = 0;
+	MaxISRDisableTime = 0;
+	TotalISRDisableTime = 0;
 }; 
 
 
@@ -214,7 +300,7 @@ void OS_Wait(Sema4Type *semaPt){
   // put Lab 2 (and beyond) solution here
 	uint32_t status = StartCritical(); //disable interrupt
 	semaPt->Value -= 1;
-	if(semaPt->Value<=0){
+	if(semaPt->Value<0){
 		RunPt->state = BLOCK;
 		RunPt->blockSemaPt = semaPt;
 		OS_Suspend();
@@ -233,14 +319,9 @@ void OS_Signal(Sema4Type *semaPt){
 	long status = StartCritical(); 
 	semaPt->Value += 1; 
 	if(semaPt->Value<=0){
-		tcbType* tmpPt = NULL;
-		tmpPt = semaPt->tcbP;
-		if(semaPt->tcbP->next!=NULL){
-			semaPt->tcbP = semaPt->tcbP->next;
-		}else{
-			semaPt->tcbP = NULL;
-		}
-		OS_InsertTcbRound(tmpPt);
+		tcbType* tmpPt = semaPt->tcbP;
+		removePriorityHelper(&(semaPt->tcbP), tmpPt);
+		insertPriorityHelper(&HeadPt, tmpPt);
 		tmpPt = NULL;
 	}
 	EndCritical(status);
@@ -253,14 +334,14 @@ void OS_Signal(Sema4Type *semaPt){
 // output: none
 void OS_bWait(Sema4Type *semaPt){
   // put Lab 2 (and beyond) solution here
-	DisableInterrupts(); 
-	while((semaPt->Value) == 0){
-		EnableInterrupts();
+	uint32_t status = StartCritical(); //disable interrupt
+	semaPt->Value -= 1;
+	if(semaPt->Value < 0){
+		RunPt->state = BLOCK;
+		RunPt->blockSemaPt = semaPt;
 		OS_Suspend();
-		DisableInterrupts();
 	}
-	semaPt->Value = 0;
-  EnableInterrupts();
+  EndCritical(status);
 }; 
 
 // ******** OS_bSignal ************
@@ -272,7 +353,15 @@ void OS_bSignal(Sema4Type *semaPt){
   // put Lab 2 (and beyond) solution here
 	long status;
 	status = StartCritical(); 
-	semaPt->Value = 1; 
+	if(semaPt->Value <= 0){
+		semaPt->Value += 1;
+	}
+	if(semaPt->Value<=0){
+		tcbType* tmpPt = semaPt->tcbP;
+		removePriorityHelper(&(semaPt->tcbP), tmpPt);
+		insertPriorityHelper(&HeadPt, tmpPt);
+		tmpPt = NULL;
+	}
 	EndCritical(status);
 }; 
 
@@ -303,20 +392,20 @@ void OS_SetInitialStack(int i){
 // Inputs: none
 // Outputs: none
 // move RunPtr to the next thread
+
+
+//******** OS_RunPtrScheduler ***************
+// Inputs: none
+// Outputs: none
+// move RunPtr to the next thread
 void OS_RunPtrScheduler(void){
 	if(RunPt->state==BLOCK){
-		tcbType* headPt = RunPt->blockSemaPt->tcbP;
-		if(headPt==NULL){
-			RunPt->blockSemaPt->tcbP = RunPt;
-		}else{
-			while(headPt->next!=NULL){
-				headPt = headPt->next;
-			}
-			headPt->next = RunPt;
-		}
-		OS_removeTcbRound();
-		RunPt->next = NULL;
+		removePriorityHelper(&HeadPt, RunPt);
+		insertPriorityHelper(&(RunPt->blockSemaPt->tcbP), RunPt);
+	}else if(RunPt->state==RUN){
+		RunPt->state=ACTIVE;
 	}
+	// if sleep, just sleep state
 	RunPt = NextPt;
 	RunPt->state = RUN;
 }
@@ -347,26 +436,12 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 		}
 		threadIdMax++;
 	}
-//	if (TailPt==NULL) {												// initialization
-//		tcbs[threadID].next = &tcbs[threadID]; // set first node pointing to itself
-//		tcbs[threadID].prior = &tcbs[threadID];
-//		RunPt = &tcbs[threadID]; 							// initiate first task
-//		TailPt = &tcbs[threadID]; 							// initiate tail node
-//	} else {
-//		tcbType* orginNext = TailPt -> next;	// store the origin next node
-//		TailPt -> next = &tcbs[threadID]; 	// current node.next point to new node
-//		tcbs[threadID].next = orginNext; 	// new node.next points to origin next
-//		tcbs[threadID].prior = TailPt;
-//		orginNext->prior = &tcbs[threadID];
-//		orginNext = NULL; // clear tmp pointer
-//		TailPt = TailPt->next;
-//	}
 	tcbs[threadID].id = threadID;			  // set the id field of the node
 	tcbs[threadID].priority = priority;  // set the priority field of the node
 	tcbs[threadID].blockSemaPt = NULL;
-	OS_SetInitialStack(threadID); 
+	OS_SetInitialStack(threadID);
 	Stacks[threadID][STACKSIZE-2] = (int32_t)(task); // PC
-	OS_InsertTcbRound(&tcbs[threadID]);
+	insertPriorityHelper(&HeadPt, &tcbs[threadID]);
 	threadID++;	// increment thread id for future new threads
   EndCritical(status);   
   return 1; // replace this line with solution
@@ -399,6 +474,11 @@ void PeriodicTask_Handler(void) {
 	periodCounter++;
 	for (int i = 0; i < TASKSLOT; i++) {
 		if (fun_ptr_arr[i] != NULL && ((periodCounter % periodicTasksPeriod[i]) == 0)) {
+			if(i==1){
+				ComputeJitterA(periodicTasksPeriod[i] * TIME_500US);
+			}else if(i==2){
+				ComputeJitterB(periodicTasksPeriod[i] * TIME_500US);
+			}
 			(*(fun_ptr_arr[i]))();
 		}
 	}
@@ -577,18 +657,11 @@ int OS_AddSW2Task(void(*task)(void), uint32_t priority){
 // OS_Sleep(0) implements cooperative multitasking
 void OS_Sleep(uint32_t sleepTime){
   // put Lab 2 (and beyond) solution here
-	DisableInterrupts();
-	NextPt = RunPt -> next;
+	long status = StartCritical();
 	RunPt->sleepCounter = (sleepTime+1)/2;
 	RunPt->state = SLEEP;
-	
-	// remove from tcb cycles
-//	if(TailPt==RunPt){
-//		TailPt = RunPt->next;
-//	}
-//	RunPt->next->prior = RunPt->prior;
-//	RunPt->prior->next = RunPt->next;
-	OS_removeTcbRound();
+	removePriorityHelper(&HeadPt, RunPt);
+	NextPt = HeadPt;
 	
 	// insert into queue
 	RunPt->next = headToSleepQueue->next;
@@ -597,7 +670,8 @@ void OS_Sleep(uint32_t sleepTime){
 	}
 	headToSleepQueue->next = RunPt;
 	RunPt->prior = headToSleepQueue;
-	EnableInterrupts();
+	
+	EndCritical(status);
 	ContextSwitch(); // questions here
 };
 
@@ -607,15 +681,13 @@ void OS_Sleep(uint32_t sleepTime){
 // output: none
 void OS_Kill(void){
   // put Lab 2 (and beyond) solution here
-	DisableInterrupts();
-	NextPt = RunPt -> next;
-	
-	OS_removeTcbRound();
-	
+	long status = StartCritical();
+	removePriorityHelper(&HeadPt, RunPt);
+	NextPt = HeadPt;
 	restoreTcbStackPt++;
 	restoredTcbStack[restoreTcbStackPt] = RunPt->id;
-	
-	EnableInterrupts();
+
+	EndCritical(status);
 	ContextSwitch(); // questions here
   for(;;){};        // can not return
     
@@ -630,7 +702,13 @@ void OS_Kill(void){
 // output: none
 void OS_Suspend(void){
   // put Lab 2 (and beyond) solution here
-	NextPt = RunPt->next;
+	long status = StartCritical();
+	NextPt = HeadPt;
+	if(NextPt==RunPt){
+		NextPt=NextPt->next;
+	}
+	EndCritical(status);
+	
   ContextSwitch();
 };
   
@@ -819,8 +897,7 @@ void OS_Launch(uint32_t theTimeSlice){
 	Timer3A_Init(&OS_Time_Increament, TIME_1US, 0);
 	Timer4A_Init(&PeriodicTask_Handler, TIME_500US, 1); // initialize periodic increament for background thread
 	OS_ClearMsTime();
-	headToSleepQueue->next=NULL; // initialize the head pt to queue
-	headToSleepQueue->prior=NULL; // initialize the head pt to queue
+	RunPt = HeadPt;
 	StartOS(); // start on the first task
 };
 
