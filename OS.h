@@ -29,12 +29,26 @@
 #define TIME_1US  (TIME_1MS/1000) 
 #define TIME_12_5NS 1		// 12.5 ns
 
+struct tcb{
+  int32_t *sp;       // pointer to stack (valid for threads not running
+	struct tcb *next;  // linked-list pointer
+	struct tcb *prior;  // linked-list pointer
+  uint32_t id;				 // id for the current thread
+	uint32_t sleepCounter;		 // sleep state of the thread, used for suspension
+	uint32_t priority;	 // the priority of the current thread (lab 3)
+	uint32_t state;  // current state of the thread
+	struct Sema4* blockSemaPt;
+};
+
+typedef struct tcb tcbType; // meaning replace "struct tcb" with tcbType
+
 /**
  * \brief Semaphore structure. Feel free to change the type of semaphore, there are lots of good solutions
  */  
 struct  Sema4{
   int32_t Value;   // >0 means free, otherwise means busy        
 // add other components here, if necessary to implement blocking
+	tcbType* tcbP;  // pointer to the head tcb
 };
 typedef struct Sema4 Sema4Type;
 

@@ -25,6 +25,10 @@ extern int32_t MaxJitter;
 extern uint32_t NumCreated;
 extern uint32_t DataLost;
 extern uint32_t PIDWork;
+<<<<<<< HEAD
+=======
+extern uint32_t PreISRDisableTime;
+>>>>>>> d81bc7adef620de3a8ad2da7cd447faf631da7ad
 extern uint32_t MaxISRDisableTime;
 extern uint32_t TotalISRDisableTime;
 
@@ -134,11 +138,19 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		UART_OutString("Max System Time during ISR disabled is: "); 
 		UART_OutUDec(MaxISRDisableTime);OutCRLF();
 		UART_OutString("Total System Time during ISR disabled is: "); 
+<<<<<<< HEAD
 		UART_OutUDec(TotalISRDisableTime);OutCRLF();		
 	}else if(!strcmp("reset_systime", cmd[0])){
 		MaxISRDisableTime = 0;
 		TotalISRDisableTime = 0;
 		UART_OutString("Finished"); OutCRLF();	
+=======
+		UART_OutUDec(TotalISRDisableTime);OutCRLF();        
+	}else if(!strcmp("reset_systime", cmd[0])){
+		MaxISRDisableTime = 0;
+		TotalISRDisableTime = 0;
+		UART_OutString("Finished"); OutCRLF();
+>>>>>>> d81bc7adef620de3a8ad2da7cd447faf631da7ad
 	}else{
 		UART_OutString("Invalid command"); OutCRLF();
 	}
