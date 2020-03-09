@@ -116,7 +116,7 @@ void OS_PostDisableISRTime(void) {
 			timeDiff = TIMER5_TAILR_R - curTime + PreISRDisableTime;
 		}
 	}
-	TotalISRDisableTime += timeDiff;
+	TotalISRDisableTime += timeDiff; 
 	if (timeDiff > MaxISRDisableTime) {
 		MaxISRDisableTime = timeDiff;
 	}

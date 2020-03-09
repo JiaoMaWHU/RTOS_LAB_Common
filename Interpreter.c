@@ -133,9 +133,13 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		ST7735_Message(0,7,"PIDWork= ",PIDWork);
 	}else if(!strcmp("get_systime", cmd[0])){
 		UART_OutString("Max System Time during ISR disabled is: "); 
+		uint32_t DisplayISRDisable = TotalISRDisableTime / 80000;
+		uint32_t ISRPercentage = (DisplayISRDisable * 10000) / OS_MsTime();
 		UART_OutUDec(MaxISRDisableTime);OutCRLF();
 		UART_OutString("Total System Time during ISR disabled is: "); 
-		UART_OutUDec(TotalISRDisableTime);OutCRLF();        
+		UART_OutUDec(DisplayISRDisable);OutCRLF();        
+		UART_OutString("The percentage(1/10000) is: "); 
+		UART_OutUDec(ISRPercentage);OutCRLF();   
 	}else if(!strcmp("reset_systime", cmd[0])){
 		MaxISRDisableTime = 0;
 		TotalISRDisableTime = 0;
