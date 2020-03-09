@@ -171,7 +171,7 @@ void SysTick_Init(unsigned long period){ // not set, specified in testmain1.... 
  */
 void OS_Init(void){
   // put Lab 2 (and beyond) solution here
-	OS_DisableInterrupts();
+	DisableInterrupts();
 	UART_Init();
 	ST7735_InitR(INITR_REDTAB); // LCD initialization
 	PLL_Init(Bus80MHz);         // set processor clock to 80 MHz
@@ -202,14 +202,14 @@ void OS_InitSemaphore(Sema4Type *semaPt, int32_t value){
 // output: none
 void OS_Wait(Sema4Type *semaPt){
   // put Lab 2 (and beyond) solution here
-  DisableInterrupts(); 
+  OS_DisableInterrupts(); 
 	while((semaPt->Value) <= 0){
 		EnableInterrupts();
 		OS_Suspend();
 		DisableInterrupts();
 	}
 	semaPt->Value -= 1;
-  EnableInterrupts();
+  OS_EnableInterrupts();
 }; 
 
 // ******** OS_Signal ************
@@ -776,7 +776,10 @@ uint32_t OS_MsTime(void){
 // Outputs: none
 void OS_PreDisableISRTime(void){
   // put Lab 1 solution here
-  PreISRDisableTime = TIMER5_TAR_R;
+	// Timer 5 has been enabled
+	if (TIMER5_CTL_R == 0x00000001) {
+	  PreISRDisableTime = TIMER5_TAR_R;
+	}
 };
 
 // ******** OS_PostISRDisableTime ************
@@ -786,7 +789,16 @@ void OS_PreDisableISRTime(void){
 // Outputs: none
 void OS_PostDisableISRTime(void) {
 	// each uint in 1ms/80000
-	uint32_t timeDiff = TIMER5_TAR_R - PreISRDisableTime;
+	uint32_t timeDiff = 0;
+	if (TIMER5_CTL_R == 0x00000001) {
+		uint32_t curTime = TIMER5_TAR_R;
+		uint32_t readTair = TIMER5_TAILR_R;
+		if (curTime <= PreISRDisableTime) {
+		  timeDiff = PreISRDisableTime - curTime;
+		} else {
+			timeDiff = TIMER5_TAILR_R - curTime + PreISRDisableTime;
+		}
+	}
 	TotalISRDisableTime += timeDiff;
 	if (timeDiff > MaxISRDisableTime) {
 		MaxISRDisableTime = timeDiff;
@@ -808,14 +820,14 @@ void OS_Launch(uint32_t theTimeSlice){
 	NVIC_ST_CTRL_R = 0X00000007;
 	NVIC_SYS_PRI3_R = (NVIC_SYS_PRI3_R&0xFF00FFFF)|((uint32_t)(7)<<21);
 	NVIC_SYS_PRI3_R = (NVIC_SYS_PRI3_R&0x00FFFFFF)|((uint32_t)(4)<<29);
+	PreISRDisableTime = 0;
+	MaxISRDisableTime = 0;
+	TotalISRDisableTime = 0;
 	Timer3A_Init(&OS_Time_Increament, TIME_1US, 0);
 	Timer4A_Init(&PeriodicTask_Handler, TIME_500US, 1); // initialize periodic increament for background thread
 	OS_ClearMsTime();
 	headToSleepQueue->next=NULL; // initialize the head pt to queue
 	headToSleepQueue->prior=NULL; // initialize the head pt to queue
-	PreISRDisableTime = 0;
-	MaxISRDisableTime = 0;
-	TotalISRDisableTime = 0;
 	StartOS(); // start on the first task
 };
 

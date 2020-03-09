@@ -28,15 +28,19 @@ NVIC_PENDSVSET  EQU     0x10000000                              ; Value to trigg
 
 	IMPORT OS_PreDisableISRTime
 OS_DisableInterrupts
-        CPSID   I
-		BL OS_PreDisableISRTime
-        BX      LR
+	CPSID   I
+	PUSH    {R0,LR}
+	BL OS_PreDisableISRTime
+	POP	 	{R0,LR}
+	BX      LR
 
 	IMPORT OS_PostDisableISRTime
 OS_EnableInterrupts
-        CPSIE   I
-		BL OS_PostDisableISRTime
-        BX      LR
+	PUSH    {R0,LR}
+	BL OS_PostDisableISRTime
+	POP	 	{R0,LR}
+	CPSIE   I
+	BX      LR
 
 StartOS
 ; put your code here
