@@ -83,6 +83,7 @@ tcbType *HeadPt = NULL;
 uint32_t PreISRDisableTime;
 uint32_t MaxISRDisableTime;
 uint32_t TotalISRDisableTime;
+uint32_t timeDiff;
 
 void (*UserSW1Task)(void);   // user function
 void (*UserSW2Task)(void);   // user function
@@ -91,11 +92,15 @@ void (*UserSW2Task)(void);   // user function
 // reads the current time counter in Timer 5 GPTMTAR), register
 // Inputs:  none
 // Outputs: none
+int Discount = 0;
+
+#define PD0  (*((volatile uint32_t *)0x40007004))
 void OS_PreDisableISRTime(void){
-  // put Lab 1 solution here
 	// Timer 5 has been enabled
-	if (SYSCTL_RCGCTIMER_R >> 5 == 0x01) {
+	Discount = Discount +1;
+	if (SYSCTL_RCGCTIMER_R >> 5 == 0x01 && Discount == 1) {
 	  PreISRDisableTime = TIMER5_TAR_R;
+		PD0 = 0x00;
 	}
 };
 
@@ -106,8 +111,8 @@ void OS_PreDisableISRTime(void){
 // Outputs: none
 void OS_PostDisableISRTime(void) {
 	// each uint in 1ms/80000
-	uint32_t timeDiff = 0;
-	if (SYSCTL_RCGCTIMER_R >> 5 == 0x01) {
+	Discount = Discount-1;
+	if (SYSCTL_RCGCTIMER_R >> 5 == 0x01 && Discount == 0) {
 		uint32_t curTime = TIMER5_TAR_R;
 		uint32_t readTair = TIMER5_TAILR_R;
 		if (curTime <= PreISRDisableTime) {
@@ -115,10 +120,13 @@ void OS_PostDisableISRTime(void) {
 		} else {
 			timeDiff = TIMER5_TAILR_R - curTime + PreISRDisableTime;
 		}
-	}
-	TotalISRDisableTime += timeDiff; 
-	if (timeDiff > MaxISRDisableTime) {
-		MaxISRDisableTime = timeDiff;
+		PD0 = 0x01;
+		TotalISRDisableTime += timeDiff;
+		PD0 = 0x00;		
+		if (timeDiff > MaxISRDisableTime) {
+			MaxISRDisableTime = timeDiff;
+		}
+		PD0 = 0x01;
 	}
 }
 

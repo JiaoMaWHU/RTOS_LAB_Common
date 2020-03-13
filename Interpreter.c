@@ -73,6 +73,8 @@ void Output_Help(void){
 	UART_OutString("clr_ms: clear the time counter and start counting"); OutCRLF(); OutCRLF();
 	UART_OutString("get_ms: output the time counter"); OutCRLF(); OutCRLF();
 	UART_OutString("get_metrics: output the performance metrics, use it only in Lab2"); OutCRLF(); OutCRLF();
+	UART_OutString("get_systime: output the total and max system runtime during ISR disabled"); OutCRLF(); OutCRLF();
+	UART_OutString("reset_systime: reset the total and max system runtime"); OutCRLF(); OutCRLF();	
 }
 
 //---------------------Call lcd function---------------------
@@ -137,7 +139,7 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		uint32_t ISRPercentage = (DisplayISRDisable * 10000) / OS_MsTime();
 		UART_OutUDec(MaxISRDisableTime);OutCRLF();
 		UART_OutString("Total System Time during ISR disabled is: "); 
-		UART_OutUDec(DisplayISRDisable);OutCRLF();        
+		UART_OutUDec(DisplayISRDisable);UART_OutString(" ms");OutCRLF();        
 		UART_OutString("The percentage(1/10000) is: "); 
 		UART_OutUDec(ISRPercentage);OutCRLF();   
 	}else if(!strcmp("reset_systime", cmd[0])){
