@@ -26,14 +26,21 @@ NVIC_LEVEL14    EQU           0xEF                              ; Systick priori
 NVIC_LEVEL15    EQU           0xFF                              ; PendSV priority value (lowest).
 NVIC_PENDSVSET  EQU     0x10000000                              ; Value to trigger PendSV exception.
 
+	IMPORT OS_PreDisableISRTime
 OS_DisableInterrupts
-        CPSID   I
-        BX      LR
+	CPSID   I
+	PUSH    {R0,LR}
+	BL OS_PreDisableISRTime
+	POP	 	{R0,LR}
+	BX      LR
 
-
+	IMPORT OS_PostDisableISRTime
 OS_EnableInterrupts
-        CPSIE   I
-        BX      LR
+	PUSH    {R0,LR}
+	BL OS_PostDisableISRTime
+	POP	 	{R0,LR}
+	CPSIE   I
+	BX      LR
 
 StartOS
 ; put your code here

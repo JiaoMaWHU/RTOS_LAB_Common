@@ -95,6 +95,11 @@ void (*UserSW2Task)(void);   // user function
 int Discount = 0;
 
 #define PD0  (*((volatile uint32_t *)0x40007004))
+	
+// ******** OS_PreISRDisableTime ************
+// reads the current time counter in Timer 5 GPTMTAR), register
+// Inputs:  none
+// Outputs: none
 void OS_PreDisableISRTime(void){
 	// Timer 5 has been enabled
 	Discount = Discount +1;
@@ -267,7 +272,7 @@ void SysTick_Init(unsigned long period){ // not set, specified in testmain1.... 
  */
 void OS_Init(void){
   // put Lab 2 (and beyond) solution here
-	OS_DisableInterrupts();
+	DisableInterrupts();
 	UART_Init();
 	ST7735_InitR(INITR_REDTAB); // LCD initialization
 	PLL_Init(Bus80MHz);         // set processor clock to 80 MHz
@@ -902,6 +907,9 @@ void OS_Launch(uint32_t theTimeSlice){
 	NVIC_ST_CTRL_R = 0X00000007;
 	NVIC_SYS_PRI3_R = (NVIC_SYS_PRI3_R&0xFF00FFFF)|((uint32_t)(7)<<21);
 	NVIC_SYS_PRI3_R = (NVIC_SYS_PRI3_R&0x00FFFFFF)|((uint32_t)(4)<<29);
+	PreISRDisableTime = 0;
+	MaxISRDisableTime = 0;
+	TotalISRDisableTime = 0;
 	Timer3A_Init(&OS_Time_Increament, TIME_1US, 0);
 	Timer4A_Init(&PeriodicTask_Handler, TIME_500US, 1); // initialize periodic increament for background thread
 	OS_ClearMsTime();
