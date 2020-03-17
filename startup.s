@@ -615,24 +615,24 @@ EnableInterrupts
 ; make a copy of previous I bit, disable interrupts
 ; inputs:  none
 ; outputs: previous I bit
-    IMPORT OS_PreDisableISRTime
+;    IMPORT OS_PreDisableISRTime
 StartCritical
         MRS    R0, PRIMASK  ; save old status
         CPSID  I            ; mask all (except faults)
-        PUSH {R0,LR}
-        BL OS_PreDisableISRTime
-        POP {R0,LR}
+;        PUSH {R0,LR}
+;        BL OS_PreDisableISRTime
+;        POP {R0,LR}
         BX     LR
 
 ;*********** EndCritical ************************
 ; using the copy of previous I bit, restore I bit to previous value
 ; inputs:  previous I bit
 ; outputs: none
-	IMPORT OS_PostDisableISRTime
+;	IMPORT OS_PostDisableISRTime
 EndCritical
-        PUSH {R0,LR}
-        BL OS_PostDisableISRTime
-        POP {R0,LR}
+;        PUSH {R0,LR}
+;        BL OS_PostDisableISRTime
+;        POP {R0,LR}
         MSR    PRIMASK, R0
         BX     LR
 
