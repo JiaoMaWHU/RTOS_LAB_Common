@@ -111,13 +111,13 @@ ContextSwitch
 ;********************************************************************************************************
 
 	IMPORT OS_RunPtrScheduler
-	IMPORT OS_PreDisableISRTime
-	IMPORT OS_PostDisableISRTime
+;	IMPORT OS_PreDisableISRTime
+;	IMPORT OS_PostDisableISRTime
 PendSV_Handler; 			   ; 1) Saves R0-R3,R12,LR,PC,PSR
     CPSID   I                  ; 2) Prevent interrupt during switch
-    PUSH    {R0,LR}
-    BL      OS_PreDisableISRTime
-    POP     {R0,LR}
+;    PUSH    {R0,LR}
+;    BL      OS_PreDisableISRTime
+;    POP     {R0,LR}
     PUSH    {R4-R11}           ; 3) Save remaining regs r4-11
     LDR     R0, =RunPt         ; 4) R0=pointer to RunPt, old thread
     LDR     R1, [R0]           ;    R1 = RunPt
@@ -130,9 +130,9 @@ PendSV_Handler; 			   ; 1) Saves R0-R3,R12,LR,PC,PSR
     LDR   	R1, [R0]
     LDR     SP, [R1]           ; 7) new thread SP; SP = RunPt->sp;
     POP     {R4-R11}           ; 8) restore regs r4-11
-    PUSH    {R0,LR}
-    BL      OS_PostDisableISRTime
-    POP     {R0,LR}
+;    PUSH    {R0,LR}
+;    BL      OS_PostDisableISRTime
+;    POP     {R0,LR}
     CPSIE   I                  ; 9) tasks run with interrupts enabled
     BX      LR                 ; 10) restore R0-R3,R12,LR,PC,PSR 
 
