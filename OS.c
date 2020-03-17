@@ -459,6 +459,24 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
   EndCritical(status);   
   return 1; // replace this line with solution
 };
+					
+//******** OS_AddProcess *************** 
+// add a process with foregound thread to the scheduler
+// Inputs: pointer to a void/void entry point
+//         pointer to process text (code) segment
+//         pointer to process data segment
+//         number of bytes allocated for its stack
+//         priority (0 is highest)
+// Outputs: 1 if successful, 0 if this process can not be added
+// This function will be needed for Lab 5
+// In Labs 2-4, this function can be ignored
+int OS_AddProcess(void(*entry)(void), void *text, void *data, 
+  unsigned long stackSize, unsigned long priority){
+  // put Lab 5 solution here
+
+     
+  return 0; // replace this line with Lab 5 solution
+}
 
 //******** OS_Id *************** 
 // returns the thread ID for the currently running thread

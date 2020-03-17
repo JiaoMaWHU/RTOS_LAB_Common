@@ -19,7 +19,6 @@
  */
 int eFile_Init(void); // initialize file system
 
-
 /**
  * @details Erase all files, create blank directory, initialize free space manager
  * @param  none
@@ -29,13 +28,20 @@ int eFile_Init(void); // initialize file system
 int eFile_Format(void); // erase disk, add format
 
 /**
+ * @details Mount disk and load file system metadata information
+ * @param  none
+ * @return 0 if successful and 1 on failure (e.g., already mounted)
+ * @brief  Mount the disk
+ */
+int eFile_Mount(void); // mount disk and file system
+
+/**
  * @details Create a new, empty file with one allocated block
  * @param  name file name is an ASCII string up to seven characters
  * @return 0 if successful and 1 on failure (e.g., already exists)
  * @brief  Create a new file
  */
-int eFile_Create( char name[]);  // create new file, make it empty 
-
+int eFile_Create(const char name[]);  // create new file, make it empty 
 
 /**
  * @details Open the file for writing, read into RAM last block
@@ -43,8 +49,7 @@ int eFile_Create( char name[]);  // create new file, make it empty
  * @return 0 if successful and 1 on failure (e.g., trouble reading from flash)
  * @brief  Open an existing file for writing
  */
-int eFile_WOpen(char name[]);      // open a file for writing 
-
+int eFile_WOpen(const char name[]);      // open a file for writing 
 
 /**
  * @details Save one byte at end of the open file
@@ -52,16 +57,7 @@ int eFile_WOpen(char name[]);      // open a file for writing
  * @return 0 if successful and 1 on failure (e.g., trouble writing to flash)
  * @brief  Format the disk
  */
-int eFile_Write(char data);  
-
-/**
- * @details Deactivate the file system. One can reactive the file system with eFile_Init.
- * @param  none
- * @return 0 if successful and 1 on failure (e.g., trouble writing to flash)
- * @brief  Close the disk
- */
-int eFile_Close(void); 
-
+int eFile_Write(const char data);  
 
 /**
  * @details Close the file, leave disk in a state power can be removed.
@@ -78,9 +74,8 @@ int eFile_WClose(void); // close the file for writing
  * @return 0 if successful and 1 on failure (e.g., trouble reading from flash)
  * @brief  Open an existing file for reading
  */
-int eFile_ROpen(char name[]);      // open a file for reading 
+int eFile_ROpen(const char name[]);      // open a file for reading 
    
-
 /**
  * @details Read one byte from disk into RAM
  * @param  pt call by reference pointer to place to save data
@@ -97,20 +92,40 @@ int eFile_ReadNext(char *pt);       // get next byte
  */
 int eFile_RClose(void); // close the file for writing
 
-
-/**
- * @details Display the directory with filenames and sizes
- * @param  fp pointer to a function that outputs ASCII characters to display
- * @return 0 if successful and 1 on failure (e.g., trouble reading from flash)
- * @brief  Show directory
- */
-int eFile_Directory(void(*fp)(char));
-
 /**
  * @details Delete the file with this name, recover blocks so they can be used by another file
  * @param  name file name is an ASCII string up to seven characters
  * @return 0 if successful and 1 on failure (e.g., file doesn't exist)
  * @brief  delete this file
  */
-int eFile_Delete(char name[]);  // remove this file 
+int eFile_Delete(const char name[]);  // remove this file 
 
+/**
+ * @details Open a (sub)directory, read into RAM
+ * @param directory name is an ASCII string up to seven characters
+ * if subdirectories are supported (optional, empty sring for root directory)
+ * @return 0 if successful and 1 on failure (e.g., trouble reading from flash)
+ */
+int eFile_DOpen(const char name[]);
+	
+/**
+ * @details Retreive directory entry from open directory
+ * @param pointers to return file name and size by reference
+ * @return 0 if successful and 1 on failure (e.g., end of directory)
+ */
+int eFile_DirNext(char *name[], unsigned long *size);
+
+/**
+ * @details Close the directory
+ * @param none
+ * @return 0 if successful and 1 on failure (e.g., wasn't open)
+ */
+int eFile_DClose(void);
+
+/**
+ * @details Unmount and deactivate the file system.
+ * @param  none
+ * @return 0 if successful and 1 on failure (e.g., trouble writing to flash)
+ * @brief  Close the disk
+ */
+int eFile_Close(void); 

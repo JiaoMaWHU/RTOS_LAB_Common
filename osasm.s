@@ -17,6 +17,7 @@
         EXPORT  PendSV_Handler
 		EXPORT  OS_DisableInterrupts
         EXPORT  OS_EnableInterrupts
+		EXPORT  SVC_Handler
 
 
 NVIC_INT_CTRL   EQU     0xE000ED04                              ; Interrupt control state register.
@@ -135,6 +136,30 @@ PendSV_Handler; 			   ; 1) Saves R0-R3,R12,LR,PC,PSR
 ;    POP     {R0,LR}
     CPSIE   I                  ; 9) tasks run with interrupts enabled
     BX      LR                 ; 10) restore R0-R3,R12,LR,PC,PSR 
+
+
+;********************************************************************************************************
+;                                         HANDLE SVC EXCEPTION
+;                                     void OS_CPU_SVCHandler(void)
+;
+; Note(s) : SVC is a software-triggered exception to make OS kernel calls from user land. 
+;           The function ID to call is encoded in the instruction itself, the location of which can be
+;           found relative to the return address saved on the stack on exception entry.
+;           Function-call paramters in R0..R3 are also auto-saved on stack on exception entry.
+;********************************************************************************************************
+
+        IMPORT    OS_Id
+        IMPORT    OS_Kill
+        IMPORT    OS_Sleep
+        IMPORT    OS_Time
+        IMPORT    OS_AddThread
+
+SVC_Handler
+; put your Lab 5 code here
+
+
+    BX      LR                   ; Return from exception
+
 
 
     ALIGN

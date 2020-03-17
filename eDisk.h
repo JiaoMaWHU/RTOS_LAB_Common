@@ -21,10 +21,15 @@
 
  */
 #ifndef _DISKIO
+
 /**
  * \brief set to 1 to enable disk write
  */
 #define _USE_WRITE	1	
+/**
+ * \brief set to 1 to enable ioctl() 
+ */
+#define _USE_IOCTL	1	
 
 typedef signed int		INT;
 typedef unsigned int	UINT;
