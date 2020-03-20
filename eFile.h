@@ -9,7 +9,14 @@
  * @note      For more information see  http://users.ece.utexas.edu/~valvano/
  * @date      Jan 12, 2020
  ******************************************************************************/
+ 
+#ifndef _EFILE
 
+#define SIZE_DIR_ENTRIES 64
+#define BYTE_PER_DIR_ENTRY 8
+#define SIZE_FAT_ENTRIES 2^11
+#define BYTE_PER_FAT_ENTRY 2
+#define DRIVE_NUM 0
 
 /**
  * @details This function must be called first, before calling any of the other eFile functions
@@ -129,3 +136,6 @@ int eFile_DClose(void);
  * @brief  Close the disk
  */
 int eFile_Close(void); 
+
+#define _EFILE
+#endif

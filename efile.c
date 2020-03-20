@@ -5,18 +5,40 @@
 #include <stdint.h>
 #include <string.h>
 #include "../RTOS_Labs_common/OS.h"
-#include "../RTOS_Labs_common/eDisk.h"
 #include "../RTOS_Labs_common/eFile.h"
+#include "../RTOS_Labs_common/eDisk.h"
 #include <stdio.h>
 
+BYTE eFile_directory[SIZE_DIR_ENTRIES * BYTE_PER_DIR_ENTRY]; // total 512B
+BYTE eFile_fat[SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY]; // total 4KB
 
 //---------- eFile_Init-----------------
 // Activate the file system, without formating
 // Input: none
-// Output: 0 if successful and 1 on failure (already initialized)
+// Output: 0 if successful and 1 on failure
 int eFile_Init(void){ // initialize file system
- 
-  return 1;   // replace
+	DSTATUS status;
+	status = eDisk_Status(DRIVE_NUM);
+	if(status!=STA_NOINIT){
+		return 0;
+	}
+	// init eDisk
+	status = eDisk_Init(DRIVE_NUM);
+	if(status){
+		return 1;
+	}
+	// read the disk and init FAT and directory
+	// first -> directorty, 1
+	status = eDisk_ReadBlock(eFile_directory, 0);
+	if(status){
+		return 1;
+	}
+	// second -> FAT, 8
+	status = eDisk_Read(DRIVE_NUM, eFile_fat, 1, (SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY)/512);
+	if(status){
+		return 1;
+	}
+  return 0;
 }
 
 //---------- eFile_Format-----------------
@@ -24,7 +46,7 @@ int eFile_Init(void){ // initialize file system
 // Input: none
 // Output: 0 if successful and 1 on failure (e.g., trouble writing to flash)
 int eFile_Format(void){ // erase disk, add format
-
+	
   return 1;   // replace
 }
 
