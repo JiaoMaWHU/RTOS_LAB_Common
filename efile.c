@@ -12,6 +12,75 @@
 
 BYTE eFile_directory[SIZE_DIR_ENTRIES * BYTE_PER_DIR_ENTRY]; // total 512B
 BYTE eFile_fat[SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY]; // total 4KB
+BYTE emptyFileName[BYTE_PER_DIR_ENTRY_NAME];
+BYTE eFile_file_buffer[512];
+CHAR dir_next_cursor = -1;
+WORD FAT_END_FLAG = SIZE_FAT_ENTRIES;
+
+void get_dir_entry(int id, WORD* filename, WORD* pointer){
+	memcpy(filename, &eFile_directory[id * BYTE_PER_DIR_ENTRY], BYTE_PER_DIR_ENTRY_NAME);
+	memcpy(pointer, &eFile_directory[id * BYTE_PER_DIR_ENTRY + BYTE_PER_DIR_ENTRY_NAME], 2);
+}
+
+void set_dir_entry(int id, const BYTE* filename, WORD* pointer){
+	memcpy(&eFile_directory[id * BYTE_PER_DIR_ENTRY], filename, BYTE_PER_DIR_ENTRY_NAME);
+	memcpy(&eFile_directory[id * BYTE_PER_DIR_ENTRY + BYTE_PER_DIR_ENTRY_NAME], pointer, 2);
+}
+
+void get_free_pointer(WORD* pointer){
+	memcpy(&pointer, &eFile_directory[SIZE_DIR_ENTRIES*BYTE_PER_DIR_ENTRY-2], 2);
+}
+
+void set_free_pointer(WORD* pointer){
+	memcpy(&eFile_directory[SIZE_DIR_ENTRIES*BYTE_PER_DIR_ENTRY-2], &pointer, 2);
+}
+
+int cmp_dir_entry_filename(int id, const BYTE* cmp_filename){
+	return memcmp(&eFile_directory[id*(BYTE_PER_DIR_ENTRY)], cmp_filename, BYTE_PER_DIR_ENTRY_NAME);
+}
+
+void get_fat_pointer(int id, WORD* pointer){
+	memcpy(pointer, &eFile_directory[id * BYTE_PER_FAT_ENTRY], BYTE_PER_FAT_ENTRY);
+}
+
+void set_fat_pointer(int id, WORD* pointer){
+	memcpy(&eFile_directory[id * BYTE_PER_FAT_ENTRY], pointer, BYTE_PER_FAT_ENTRY);
+}
+
+int cmp_fat_pointer(int id, WORD* pointer){
+	return memcmp(&eFile_directory[id * BYTE_PER_FAT_ENTRY], pointer, BYTE_PER_FAT_ENTRY);
+}
+
+//---------- alloc_fat_space-----------------
+// Allocate free space in fat
+// Input: size of free space
+// Output: end_flag if no enough space, otherwise the start index
+WORD alloc_fat_space(int size){
+	WORD free_space_id;
+	get_free_pointer(&free_space_id);
+	WORD next = free_space_id;
+	WORD last;
+	int count = 0;
+	
+	// end flag
+	while(!cmp_fat_pointer(next, &FAT_END_FLAG)){
+		last = next;
+		get_fat_pointer(next, &next);
+		count++;
+		if(count==size){
+			set_fat_pointer(last, &FAT_END_FLAG);
+			set_free_pointer(&next);
+			break;
+		}
+	}
+	
+	// no enough space
+	if(count<size){
+		return FAT_END_FLAG;
+	}
+	
+	return free_space_id;
+}
 
 //---------- eFile_Init-----------------
 // Activate the file system, without formating
@@ -25,6 +94,7 @@ int eFile_Init(void){ // initialize file system
 	}
 	// init eDisk
 	status = eDisk_Init(DRIVE_NUM);
+	memset(emptyFileName, 0, sizeof(emptyFileName));
 	if(status){
 		return 1;
 	}
@@ -36,31 +106,39 @@ int eFile_Init(void){ // initialize file system
 // Input: none
 // Output: 0 if successful and 1 on failure (e.g., trouble writing to flash)
 int eFile_Format(void){ // erase disk, add format
+	DSTATUS status = eFile_Init();
+	if(status){
+		return 1;
+	}
+
 	memset(eFile_directory, 0, sizeof(eFile_directory));
-	memset(eFile_directory, 0, sizeof(eFile_fat));
+	memset(eFile_fat, 0, sizeof(eFile_fat));
 	
 	// set the first directory entry
 //	WORD first_dir_entry = 0;
 //	memcpy(&eFile_directory[6], &first_dir_entry, 2);
 	
 	// format the fat
-	int index = 0;
-	for(int i = 0; i<(SIZE_FAT_ENTRIES-1); ){
-		index = i*2;
+	WORD index = 0;
+	for(WORD i = 0; i<(SIZE_FAT_ENTRIES-1); ){
+		index = i;
 		i++;
-		memcpy(&eFile_fat[index], &i, 2);
+		set_fat_pointer(index, &i);
 	}
 	
-	// write back, we don't need to format the actual data
-	DSTATUS status = eDisk_WriteBlock(eFile_directory, 0);
+	// set the last point to END FLAG
+	set_fat_pointer(SIZE_FAT_ENTRIES-1, &FAT_END_FLAG);
+	
+	status = eFile_Close();
 	if(status){
 		return 1;
 	}
-	// second -> FAT, 8
-	status = eDisk_Write(DRIVE_NUM, eFile_fat, 1, (SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY)/512);
+	
+	status = eFile_DClose();
 	if(status){
 		return 1;
 	}
+	
   return 0;   // replace
 }
 
@@ -71,11 +149,10 @@ int eFile_Format(void){ // erase disk, add format
 int eFile_Mount(void){ // initialize file system
 	// read the disk and init FAT and directory
 	// first -> directorty, 1
-	DSTATUS status = eDisk_ReadBlock(eFile_directory, 0);
+	DSTATUS status = eFile_Init();
 	if(status){
 		return 1;
 	}
-	// second -> FAT, 8
 	status = eDisk_Read(DRIVE_NUM, eFile_fat, 1, (SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY)/512);
 	if(status){
 		return 1;
@@ -89,8 +166,31 @@ int eFile_Mount(void){ // initialize file system
 // Input: file name is an ASCII string up to seven characters 
 // Output: 0 if successful and 1 on failure (e.g., trouble writing to flash)
 int eFile_Create( const char name[]){  // create new file, make it empty 
-
-  return 1;   // replace
+	DSTATUS status = eFile_Init();
+	if(status){
+		return 1;
+	}
+	
+	// fill one entry, select the first
+	WORD index;
+	for(index = 0; index<SIZE_DIR_ENTRIES-1; index++){
+		if(!cmp_dir_entry_filename(index, emptyFileName)){
+			break;
+		}
+	}
+	// full directory
+	if(index == SIZE_DIR_ENTRIES-1){
+		return 1;
+	}
+	
+	// get one block free space
+	WORD start = alloc_fat_space(1);
+	if(start==(SIZE_FAT_ENTRIES)){
+		return 1;
+	}
+	set_dir_entry(index, (BYTE*)name, &start);
+	
+  return 0;   // replace
 }
 
 
@@ -99,7 +199,7 @@ int eFile_Create( const char name[]){  // create new file, make it empty
 // Input: file name is a single ASCII letter
 // Output: 0 if successful and 1 on failure (e.g., trouble writing to flash)
 int eFile_WOpen( const char name[]){      // open a file for writing 
-
+	
   return 1;   // replace  
 }
 
@@ -155,9 +255,39 @@ int eFile_RClose(void){ // close the file for writing
 // delete this file
 // Input: file name is a single ASCII letter
 // Output: 0 if successful and 1 on failure (e.g., trouble writing to flash)
-int eFile_Delete( const char name[]){  // remove this file 
-
-  return 1;   // replace
+int eFile_Delete(const char name[]){  // remove this file 
+	int i;
+	for(i=0; i<SIZE_DIR_ENTRIES-1; i++){
+		if(!cmp_dir_entry_filename(i, (BYTE*)name)){
+			break;
+		}
+	}
+	if(i==(SIZE_DIR_ENTRIES-1)){
+		// no such file
+		return 1;
+	}
+	
+	// clear file block
+	WORD start;
+	memcpy(&start, &eFile_directory[i * BYTE_PER_DIR_ENTRY + BYTE_PER_DIR_ENTRY_NAME], 2);
+	WORD next = start;
+	BYTE empty_buffer[512];
+	memset(empty_buffer, 0, sizeof(empty_buffer));
+	while(!cmp_fat_pointer(next, &FAT_END_FLAG)){
+		eDisk_WriteBlock(empty_buffer, next+START_BLOCK_OF_FILE);
+		get_fat_pointer(next, &next);
+	}
+	eDisk_WriteBlock(empty_buffer, next);
+	
+	// free FAT space
+	WORD free_space_id;
+	get_free_pointer(&free_space_id);
+	set_fat_pointer(next, &free_space_id);
+	set_free_pointer(&start);
+	
+	// clear directory
+	memset(&eFile_directory[i*BYTE_PER_DIR_ENTRY], 0, BYTE_PER_DIR_ENTRY);
+  return 0;   // replace
 }                             
 
 
@@ -166,9 +296,16 @@ int eFile_Delete( const char name[]){  // remove this file
 // Input: directory name is an ASCII string up to seven characters
 //        (empty/NULL for root directory)
 // Output: 0 if successful and 1 on failure (e.g., trouble reading from flash)
-int eFile_DOpen( const char name[]){ // open directory
-   
-  return 1;   // replace
+int eFile_DOpen(void){ // open directory
+	DSTATUS status = eFile_Init();
+	if(status){
+		return 1;
+	}
+  status = eDisk_ReadBlock(eFile_directory, 0);
+	if(status){
+		return 1;
+	}
+  return 0;   // replace
 }
   
 //---------- eFile_DirNext-----------------
@@ -186,8 +323,15 @@ int eFile_DirNext( char *name[], unsigned long *size){  // get next entry
 // Input: none
 // Output: 0 if successful and 1 on failure (e.g., wasn't open)
 int eFile_DClose(void){ // close the directory
-   
-  return 1;   // replace
+	DSTATUS status = eFile_Init();
+	if(status){
+		return 1;
+	}
+  status = eDisk_WriteBlock(eFile_directory, 0);
+	if(status){
+		return 1;
+	}
+  return 0;   // replace
 }
 
 
@@ -195,7 +339,15 @@ int eFile_DClose(void){ // close the directory
 // Deactivate the file system
 // Input: none
 // Output: 0 if successful and 1 on failure (not currently open)
-int eFile_Close(void){ 
-   
-  return 1;   // replace
+int eFile_Close(void){
+	DSTATUS status = eFile_Init();
+	if(status){
+		return 1;
+	}
+  status = eDisk_Write(DRIVE_NUM, eFile_fat, ((SIZE_DIR_ENTRIES*BYTE_PER_DIR_ENTRY)/512)-1,
+			(SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY)/512);
+	if(status){
+		return 1;
+	}
+  return 0;   // replace
 }
