@@ -19,6 +19,7 @@
 #define BYTE_PER_FAT_ENTRY 2
 #define START_BLOCK_OF_FILE ((SIZE_FAT_ENTRIES*BYTE_PER_FAT_ENTRY + SIZE_DIR_ENTRIES*BYTE_PER_DIR_ENTRY)/512)-1
 #define DRIVE_NUM 0
+#define END_OF_TEXT 0x00
 
 /**
  * @details This function must be called first, before calling any of the other eFile functions
