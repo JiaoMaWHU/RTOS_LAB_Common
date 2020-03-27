@@ -54,6 +54,7 @@ void set_free_pointer(WORD* pointer){
 }
 
 int cmp_dir_entry_filename(int id, const BYTE* cmp_filename){
+	// return 0 if equal, otherwise logical 1
 	return memcmp(&eFile_directory[id*(BYTE_PER_DIR_ENTRY)], cmp_filename, BYTE_PER_DIR_ENTRY_NAME);
 }
 
@@ -68,6 +69,7 @@ void set_fat_pointer(int id, WORD* pointer){
 }
 
 int cmp_fat_pointer(int id, WORD* pointer){
+	// return 0 if equal, otherwise logical 1
 	return memcmp(&eFile_directory[id * BYTE_PER_FAT_ENTRY], pointer, BYTE_PER_FAT_ENTRY);
 }
 
@@ -82,15 +84,18 @@ WORD alloc_fat_space(int size){
 	WORD last;
 	int count = 0;
 	// find free blocks
-	while(!cmp_fat_pointer(next, &FAT_END_FLAG)){
-		last = next;
-		get_fat_pointer(next, &next);
+	while(TRUE){
 		count++;
+		last = next;
 		if(count==size){ // enough space, 
 			set_fat_pointer(last, &FAT_END_FLAG); // last entry 
 			set_free_pointer(&next);
 			break;
 		}
+		if(!cmp_fat_pointer(next, &FAT_END_FLAG)){
+			break;
+		}
+		get_fat_pointer(next, &next);
 	}
 	
 	// no enough space
@@ -156,11 +161,12 @@ int eFile_Format(void){ // erase disk, add format
 	// format real file in the disk
 	BYTE empty_buffer[512];
 	memset(empty_buffer, 0, sizeof(empty_buffer));
-	status = eDisk_Write(DRIVE_NUM, empty_buffer, 0, SIZE_FAT_ENTRIES);
-	if(status){
-		return 1;
+	for(int i=0; i<(SIZE_FAT_ENTRIES); i++){
+		status = eDisk_WriteBlock(empty_buffer, i+START_BLOCK_OF_FILE);
+		if(status){
+			return 1;
+		}
 	}
-	
 	status = eFile_Close();
 	if(status){
 		return 1;
@@ -255,7 +261,7 @@ int eFile_WOpen( const char name[]){      // open a file for writing
 	// at the end of loop, next will be the index of last block
 	WORD next;
 	get_dir_entry(i, NULL, &next);
-	while(!cmp_fat_pointer(next, &FAT_END_FLAG)){
+	while(cmp_fat_pointer(next, &FAT_END_FLAG)){
 		get_fat_pointer(next, &next);
 	}
 	
@@ -263,7 +269,7 @@ int eFile_WOpen( const char name[]){      // open a file for writing
 	file_written_fat_id = next;
 	
 	// read the last block into buffer
-	status = eDisk_ReadBlock(eFile_writer_buffer, next);
+	status = eDisk_ReadBlock(eFile_writer_buffer, next+START_BLOCK_OF_FILE);
 	if(status){
 		OS_Signal(&writerSema);
 		return 1;
@@ -299,7 +305,7 @@ int eFile_Write( const char data){
 	// save this block, allocate a new block
 	if(writer_buf_end_id==512){
 		// write buffer back
-		status = eDisk_WriteBlock(eFile_writer_buffer,file_written_fat_id);
+		status = eDisk_WriteBlock(eFile_writer_buffer,file_written_fat_id+START_BLOCK_OF_FILE);
 		memset(eFile_writer_buffer, 0, sizeof(eFile_writer_buffer));
 		
 		// allocate a new block
@@ -332,7 +338,7 @@ int eFile_WClose(void){ // close the file for writing
 	writer_buf_end_id = -1;
 	
 	// write buffer back
-	status = eDisk_WriteBlock(eFile_writer_buffer, file_written_fat_id);
+	status = eDisk_WriteBlock(eFile_writer_buffer, file_written_fat_id+START_BLOCK_OF_FILE);
 	if(status){
 		OS_Signal(&writerSema);
 		return 1;
@@ -388,7 +394,7 @@ int eFile_ROpen( const char name[]){      // open a file for reading
 	reader_buf_read_id = 0;
 	
 	// load buffer
-	status = eDisk_ReadBlock(eFile_reader_buffer, next);
+	status = eDisk_ReadBlock(eFile_reader_buffer, next+START_BLOCK_OF_FILE);
 	if(status){
 		readerCounter--;
 		OS_Signal(&readerSema);
@@ -419,7 +425,7 @@ int eFile_ReadNext( char *pt){       // get next byte
 	if(reader_buf_read_id==512){
 		WORD next;
 		get_fat_pointer(file_read_fat_id, &next);
-		status = eDisk_ReadBlock(eFile_reader_buffer, next);
+		status = eDisk_ReadBlock(eFile_reader_buffer, next+START_BLOCK_OF_FILE);
 		if(status){
 			// loading failed
 			return 1;
@@ -478,16 +484,15 @@ int eFile_Delete(const char name[]){  // remove this file
 	WORD next = start;
 	BYTE empty_buffer[512];
 	memset(empty_buffer, 0, sizeof(empty_buffer));
-	while(!cmp_fat_pointer(next, &FAT_END_FLAG)){
+	while(TRUE){
 		status = eDisk_WriteBlock(empty_buffer, next+START_BLOCK_OF_FILE);
 		if(status){
 			return 1;
 		}
+		if(!cmp_fat_pointer(next, &FAT_END_FLAG)){
+			break;
+		}
 		get_fat_pointer(next, &next);
-	}
-	status = eDisk_WriteBlock(empty_buffer, next);
-	if(status){
-		return 1;
 	}
 	
 	// free FAT space
@@ -545,9 +550,12 @@ int eFile_DirNext( char *name[], unsigned long *size){  // get next entry
 	int size_ = 1;
 	WORD next;
 	get_dir_entry(i, NULL, &next);
-	while(!cmp_fat_pointer(next, &FAT_END_FLAG)){
-		get_fat_pointer(next, &next);
+	while(TRUE){
 		size_++;
+		if(!cmp_fat_pointer(next, &FAT_END_FLAG)){
+			break;
+		}
+		get_fat_pointer(next, &next);
 	}
 	
 	*size = size_;
