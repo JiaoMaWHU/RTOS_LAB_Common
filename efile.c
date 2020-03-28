@@ -61,16 +61,16 @@ int cmp_dir_entry_filename(int id, const BYTE* cmp_filename){
 // util of fat array
 
 void get_fat_pointer(int id, WORD* pointer){
-	memcpy(pointer, &eFile_directory[id * BYTE_PER_FAT_ENTRY], BYTE_PER_FAT_ENTRY);
+	memcpy(pointer, &eFile_fat[id * BYTE_PER_FAT_ENTRY], BYTE_PER_FAT_ENTRY);
 }
 
 void set_fat_pointer(int id, WORD* pointer){
-	memcpy(&eFile_directory[id * BYTE_PER_FAT_ENTRY], pointer, BYTE_PER_FAT_ENTRY);
+	memcpy(&eFile_fat[id * BYTE_PER_FAT_ENTRY], pointer, BYTE_PER_FAT_ENTRY);
 }
 
 int cmp_fat_pointer(int id, WORD* pointer){
 	// return 0 if equal, otherwise logical 1
-	return memcmp(&eFile_directory[id * BYTE_PER_FAT_ENTRY], pointer, BYTE_PER_FAT_ENTRY);
+	return memcmp(&eFile_fat[id * BYTE_PER_FAT_ENTRY], pointer, BYTE_PER_FAT_ENTRY);
 }
 
 //---------- alloc_fat_space-----------------
@@ -144,6 +144,9 @@ int eFile_Format(void){ // erase disk, add format
 	memset(eFile_directory, 0, sizeof(eFile_directory));
 	memset(eFile_fat, 0, sizeof(eFile_fat));
 	
+	printf("Size of eFile_directory: %i \r\n", sizeof(eFile_directory));
+	printf("Size of eFile_fat: %i \r\n", sizeof(eFile_fat));
+	
 	// set the first directory entry
 //	WORD first_dir_entry = 0;
 //	memcpy(&eFile_directory[6], &first_dir_entry, 2);
@@ -161,6 +164,7 @@ int eFile_Format(void){ // erase disk, add format
 	// format real file in the disk
 	BYTE empty_buffer[512];
 	memset(empty_buffer, 0, sizeof(empty_buffer));
+	
 	for(int i=0; i<(SIZE_FAT_ENTRIES); i++){
 		status = eDisk_WriteBlock(empty_buffer, i+START_BLOCK_OF_FILE);
 		if(status){
@@ -538,7 +542,7 @@ int eFile_DirNext( char *name[], unsigned long *size){  // get next entry
 	// find the file entry in directory
 	int i;
 	for(i=0; i<SIZE_DIR_ENTRIES-1; i++){
-		if(!cmp_dir_entry_filename(i, (BYTE*)name)){
+		if(!cmp_dir_entry_filename(i, (BYTE*) name)){
 			break;
 		}
 	}

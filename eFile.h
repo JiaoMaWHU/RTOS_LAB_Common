@@ -15,7 +15,7 @@
 #define SIZE_DIR_ENTRIES 64
 #define BYTE_PER_DIR_ENTRY 8
 #define BYTE_PER_DIR_ENTRY_NAME 6
-#define SIZE_FAT_ENTRIES 2^11
+#define SIZE_FAT_ENTRIES 2048
 #define BYTE_PER_FAT_ENTRY 2
 #define START_BLOCK_OF_FILE ((SIZE_FAT_ENTRIES*BYTE_PER_FAT_ENTRY + SIZE_DIR_ENTRIES*BYTE_PER_DIR_ENTRY)/512)
 #define DRIVE_NUM 0
@@ -138,7 +138,7 @@ int eFile_DClose(void);
  * @return 0 if successful and 1 on failure (e.g., trouble writing to flash)
  * @brief  Close the disk
  */
-int eFile_Close(void); 
+int eFile_Close(void);
 
 #define _EFILE
 #endif
