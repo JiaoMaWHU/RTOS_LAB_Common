@@ -542,15 +542,20 @@ int eFile_DirNext( char *name[], unsigned long *size){  // get next entry
 	// find the file entry in directory
 	int i;
 	for(i=0; i<SIZE_DIR_ENTRIES-1; i++){
-		if(!cmp_dir_entry_filename(i, (BYTE*) name)){
+		if(!cmp_dir_entry_filename(i, (BYTE*)(*name))){
 			break;
 		}
 	}
 	if(i==(SIZE_DIR_ENTRIES-1)){
-		// no such file
+		// no such file or no next file
 		return 1;
 	}
 	
+	// change the filename to next file
+	i=i+1;
+	(*name) = (char *)&eFile_directory[i * BYTE_PER_DIR_ENTRY];
+	
+	// change the size
 	int size_ = 1;
 	WORD next;
 	get_dir_entry(i, NULL, &next);
