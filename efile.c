@@ -47,11 +47,11 @@ void set_dir_entry(int id, const BYTE* filename, WORD* pointer){
 }
 
 void get_free_pointer(WORD* pointer){
-	memcpy(&pointer, &eFile_directory[SIZE_DIR_ENTRIES*BYTE_PER_DIR_ENTRY-2], 2);
+	memcpy(pointer, &eFile_directory[SIZE_DIR_ENTRIES*BYTE_PER_DIR_ENTRY-2], 2);
 }
 
 void set_free_pointer(WORD* pointer){
-	memcpy(&eFile_directory[SIZE_DIR_ENTRIES*BYTE_PER_DIR_ENTRY-2], &pointer, 2);
+	memcpy(&eFile_directory[SIZE_DIR_ENTRIES*BYTE_PER_DIR_ENTRY-2], pointer, 2);
 }
 
 int cmp_dir_entry_filename(int id, const BYTE* cmp_filename){
@@ -97,6 +97,7 @@ WORD alloc_fat_space(int size){
 		count++;
 		last = next;
 		if(count==size){ // enough space, 
+			get_fat_pointer(next, &next);
 			set_fat_pointer(last, &FAT_END_FLAG); // last entry 
 			set_free_pointer(&next);
 			break;
@@ -163,7 +164,7 @@ int eFile_Format(void){ // erase disk, add format
 	// format the fat
 	WORD index = 0;
 	for(WORD i = 0; i<(SIZE_FAT_ENTRIES-1); i++){
-		index = i+1;
+		index = (i+1) * 2;
 		set_fat_pointer(i, &index);
 	}
 	
@@ -332,7 +333,7 @@ int eFile_Write( const char data){
 		WORD next = alloc_fat_space(1);
 		
 		// set the pointer of the end fat entry to a new entry
-//		set_fat_pointer(file_written_fat_id, &next);
+		set_fat_pointer(file_written_fat_id, &next);
 		
 		// update
 		file_written_fat_id = next;
@@ -371,6 +372,13 @@ int eFile_WClose(void){ // close the file for writing
 		OS_Signal(&writerSema);
 		return 1;
 	}
+	
+//	// write the directory back
+//	status = eDisk_WriteBlock(eFile_directory, 0);
+//	if(status){
+//		OS_Signal(&writerSema);
+//		return 1;
+//	}
 	
 	OS_Signal(&writerSema);
 	
