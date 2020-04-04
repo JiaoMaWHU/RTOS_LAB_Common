@@ -4,6 +4,7 @@
 // Jonathan W. Valvano 1/12/20
 #include <stdint.h>
 #include <string.h>
+#include <stdbool.h>
 #include "../RTOS_Labs_common/OS.h"
 #include "../RTOS_Labs_common/eFile.h"
 #include "../RTOS_Labs_common/eDisk.h"
@@ -56,6 +57,14 @@ void set_free_pointer(WORD* pointer){
 int cmp_dir_entry_filename(int id, const BYTE* cmp_filename){
 	// return 0 if equal, otherwise logical 1
 	return memcmp(&eFile_directory[id*(BYTE_PER_DIR_ENTRY)], cmp_filename, BYTE_PER_DIR_ENTRY_NAME);
+}
+
+int empty_entry_filename(int id){
+	// return 1 if file name is empty, otherwise logical 0
+	for (int i = 0; i < BYTE_PER_DIR_ENTRY_NAME; i++) {
+		if (eFile_directory[id*(BYTE_PER_DIR_ENTRY)+i] != 0) return 0;
+	}
+	return 1;
 }
 
 // util of fat array
@@ -213,10 +222,12 @@ int eFile_Create( const char name[]){  // create new file, make it empty
 		return 1;
 	}
 	
+	BYTE *emptyFile = 0x00;
+	
 	// fill one entry, select the first
 	WORD index;
 	for(index = 0; index<SIZE_DIR_ENTRIES-1; index++){
-		if(!cmp_dir_entry_filename(index, emptyFileName)){
+		if(cmp_dir_entry_filename(index, emptyFile) || !cmp_dir_entry_filename(index, (BYTE*) name)){
 			break;
 		}
 	}
@@ -231,6 +242,9 @@ int eFile_Create( const char name[]){  // create new file, make it empty
 		return 1;
 	}
 	set_dir_entry(index, (BYTE*)name, &start);
+	
+	// write to disk after a file is created
+	eDisk_WriteBlock(eFile_directory,0);
 	
   return 0;   // replace
 }
@@ -274,6 +288,7 @@ int eFile_WOpen( const char name[]){      // open a file for writing
 	
 	// read the last block into buffer
 	status = eDisk_ReadBlock(eFile_writer_buffer, next+START_BLOCK_OF_FILE);
+	
 	if(status){
 		OS_Signal(&writerSema);
 		return 1;
@@ -299,6 +314,7 @@ int eFile_Write( const char data){
 			if(eFile_writer_buffer[i]==END_OF_TEXT){
 				break;
 			}
+			i += 1;
 		}
 		writer_buf_end_id = i;
 	}
@@ -314,8 +330,9 @@ int eFile_Write( const char data){
 		
 		// allocate a new block
 		WORD next = alloc_fat_space(1);
+		
 		// set the pointer of the end fat entry to a new entry
-		set_fat_pointer(file_written_fat_id, &next);
+//		set_fat_pointer(file_written_fat_id, &next);
 		
 		// update
 		file_written_fat_id = next;
@@ -525,6 +542,7 @@ int eFile_DOpen(void){ // open directory
 	if(status){
 		return 1;
 	}
+	
   return 0;   // replace
 }
   
@@ -539,20 +557,47 @@ int eFile_DirNext( char *name[], unsigned long *size){  // get next entry
 		return 1;
 	}
 	
+	bool nameEmpty = FALSE;
+	
+	// empty input name ""
+	if (*name[0] == 0) {
+		nameEmpty = TRUE;
+	}
+	
 	// find the file entry in directory
 	int i;
 	for(i=0; i<SIZE_DIR_ENTRIES-1; i++){
-		if(!cmp_dir_entry_filename(i, (BYTE*)(*name))){
-			break;
+		if (nameEmpty) {
+			// find first name entry that is not empty string
+			if (!empty_entry_filename(i)) {
+				break;
+			}
+		} else {
+			// find the entry that matches the input name
+			if(!cmp_dir_entry_filename(i, (BYTE*)(*name))){
+				break;
+			}
 		}
 	}
+
+	// to find the next not empty entry name
+	if (!nameEmpty) {
+    // index after the last non-empty entry
+		i = i + 1;
+		while (i < (SIZE_DIR_ENTRIES-1)) {
+      if (!empty_entry_filename(i)) {
+        break;
+      }
+      i++;
+    }
+  }
+	
 	if(i==(SIZE_DIR_ENTRIES-1)){
-		// no such file or no next file
+		// no such file or no next file or no files exist
 		return 1;
 	}
 	
 	// change the filename to next file
-	i=i+1;
 	(*name) = (char *)&eFile_directory[i * BYTE_PER_DIR_ENTRY];
 	
 	// change the size
@@ -581,6 +626,7 @@ int eFile_DClose(void){ // close the directory
 		return 1;
 	}
   status = eDisk_WriteBlock(eFile_directory, 0);
+	status = eDisk_ReadBlock(eFile_directory, 0);
 	if(status){
 		return 1;
 	}
