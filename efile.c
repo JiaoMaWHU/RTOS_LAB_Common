@@ -164,7 +164,7 @@ int eFile_Format(void){ // erase disk, add format
 	// format the fat
 	WORD index = 0;
 	for(WORD i = 0; i<(SIZE_FAT_ENTRIES-1); i++){
-		index = (i+1) * 2;
+		index = i+1;
 		set_fat_pointer(i, &index);
 	}
 	
@@ -288,7 +288,7 @@ int eFile_WOpen( const char name[]){      // open a file for writing
 	file_written_fat_id = next;
 	
 	// read the last block into buffer
-	status = eDisk_ReadBlock(eFile_writer_buffer, next+START_BLOCK_OF_FILE);
+	status = eDisk_ReadBlock(eFile_writer_buffer, file_written_fat_id+START_BLOCK_OF_FILE);
 	
 	if(status){
 		OS_Signal(&writerSema);
@@ -648,6 +648,11 @@ int eFile_DClose(void){ // close the directory
 // Output: 0 if successful and 1 on failure (not currently open)
 int eFile_Close(void){
 	DSTATUS status = eFile_Init();
+	if(status){
+		return 1;
+	}
+	// need to update the free ptr in field
+	status = eDisk_WriteBlock(eFile_directory, 0);
 	if(status){
 		return 1;
 	}
