@@ -373,12 +373,12 @@ int eFile_WClose(void){ // close the file for writing
 		return 1;
 	}
 	
-//	// write the directory back
-//	status = eDisk_WriteBlock(eFile_directory, 0);
-//	if(status){
-//		OS_Signal(&writerSema);
-//		return 1;
-//	}
+	// write the directory back
+	status = eDisk_WriteBlock(eFile_directory, 0);
+	if(status){
+		OS_Signal(&writerSema);
+		return 1;
+	}
 	
 	OS_Signal(&writerSema);
 	
@@ -650,7 +650,7 @@ int eFile_DClose(void){ // close the directory
 // Input: none
 // Output: 0 if successful and 1 on failure (not currently open)
 int eFile_Close(void){
-	DSTATUS status = eFile_Init();
+	DSTATUS status = eFile_RClose();
 	if(status){
 		return 1;
 	}
