@@ -532,6 +532,9 @@ int eFile_Delete(const char name[]){  // remove this file
 	
 	// clear directory
 	memset(&eFile_directory[i*BYTE_PER_DIR_ENTRY], 0, BYTE_PER_DIR_ENTRY);
+	
+	// update directory after deletion 
+	eDisk_WriteBlock(eFile_directory,0);
   return 0;   // replace
 }                             
 
