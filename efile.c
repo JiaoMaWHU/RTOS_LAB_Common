@@ -8,6 +8,7 @@
 #include "../RTOS_Labs_common/OS.h"
 #include "../RTOS_Labs_common/eFile.h"
 #include "../RTOS_Labs_common/eDisk.h"
+#include "../RTOS_Labs_common/UART0int.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -154,13 +155,6 @@ int eFile_Format(void){ // erase disk, add format
 	memset(eFile_directory, 0, sizeof(eFile_directory));
 	memset(eFile_fat, 0, sizeof(eFile_fat));
 	
-	printf("Size of eFile_directory: %i \r\n", sizeof(eFile_directory));
-	printf("Size of eFile_fat: %i \r\n", sizeof(eFile_fat));
-	
-	// set the first directory entry
-//	WORD first_dir_entry = 0;
-//	memcpy(&eFile_directory[6], &first_dir_entry, 2);
-	
 	// format the fat
 	WORD index = 0;
 	for(WORD i = 0; i<(SIZE_FAT_ENTRIES-1); i++){
@@ -175,21 +169,29 @@ int eFile_Format(void){ // erase disk, add format
 	BYTE empty_buffer[512];
 	memset(empty_buffer, 0, sizeof(empty_buffer));
 	
+	// wipe disk
 	for(int i=0; i<(SIZE_FAT_ENTRIES); i++){
 		status = eDisk_WriteBlock(empty_buffer, i+START_BLOCK_OF_FILE);
 		if(status){
 			return 1;
 		}
 	}
-	status = eFile_Close();
+	
+	// write formated dir and fat to disk
+	status = eDisk_WriteBlock(eFile_directory, 0);
+	if(status){
+		return 1;
+	}
+	// write fat to disk
+  status = eDisk_Write(DRIVE_NUM, eFile_fat, 1, (SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY)/512);
 	if(status){
 		return 1;
 	}
 	
-	status = eFile_DClose();
-	if(status){
-		return 1;
-	}
+	memset(eFile_writer_buffer, 0, sizeof(eFile_writer_buffer));
+	memset(eFile_reader_buffer, 0, sizeof(eFile_reader_buffer));
+	writer_buf_end_id = -1;
+	reader_buf_read_id = -1;
 	
   return 0;   // replace
 }
@@ -205,6 +207,8 @@ int eFile_Mount(void){ // initialize file system
 	if(status){
 		return 1;
 	}
+	// mount file directory
+	status = eFile_DOpen();
 	status = eDisk_Read(DRIVE_NUM, eFile_fat, 1, (SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY)/512);
 	if(status){
 		return 1;
@@ -223,12 +227,10 @@ int eFile_Create( const char name[]){  // create new file, make it empty
 		return 1;
 	}
 	
-	BYTE *emptyFile = 0x00;
-	
 	// fill one entry, select the first
 	WORD index;
 	for(index = 0; index<SIZE_DIR_ENTRIES-1; index++){
-		if(cmp_dir_entry_filename(index, emptyFile) || !cmp_dir_entry_filename(index, (BYTE*) name)){
+		if(eFile_directory[index*(BYTE_PER_DIR_ENTRY)] == 0){
 			break;
 		}
 	}
@@ -367,7 +369,7 @@ int eFile_WClose(void){ // close the file for writing
 	}
 	
 	// write the fat back
-	status = eFile_Close();
+	status = eDisk_Write(DRIVE_NUM, eFile_fat, 1, (SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY)/512);
 	if(status){
 		OS_Signal(&writerSema);
 		return 1;
@@ -650,18 +652,101 @@ int eFile_DClose(void){ // close the directory
 // Input: none
 // Output: 0 if successful and 1 on failure (not currently open)
 int eFile_Close(void){
-	DSTATUS status = eFile_RClose();
+	DSTATUS status;
+	if (readerCounter > 0) {
+		status = eFile_RClose();
+	}
 	if(status){
 		return 1;
 	}
-	// need to update the free ptr in field
+	// write directory to disk
 	status = eDisk_WriteBlock(eFile_directory, 0);
 	if(status){
 		return 1;
 	}
+	// write fat to disk
   status = eDisk_Write(DRIVE_NUM, eFile_fat, 1, (SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY)/512);
 	if(status){
 		return 1;
 	}
-  return 0;   // replace
+	
+	// reset all relative data in RAM to default (deactivating)
+	memset(eFile_directory, 0, sizeof(eFile_directory));
+	memset(eFile_fat, 0, sizeof(eFile_fat));
+	memset(eFile_writer_buffer, 0, sizeof(eFile_writer_buffer));
+	memset(eFile_reader_buffer, 0, sizeof(eFile_reader_buffer));
+	writer_buf_end_id = -1;
+	reader_buf_read_id = -1;
+  
+	return 0;   // replace
+}
+
+//---------- eFile_ReadFile-----------------
+// Read and print the content of an given file, closed file after read
+// Input: 
+// Output: 0 if successful and 1 on failure (not currently open)
+int eFile_ReadFile(const char name[]) {
+  // open dirctory to load directory from disk
+	char data;
+	
+	DSTATUS status = eFile_DOpen();
+	if (status) {
+		printf("Failed to load dir \n\r");
+		return 1;
+	}
+	
+	// mount the fat table
+	status = eFile_Mount();
+	if (status) {
+		return 1;
+	}
+	
+	// open file
+	status = eFile_ROpen(name);
+	if (status) {
+		printf("Error! File not found \n\r  ");
+		return 1;
+	}
+	
+	while (!eFile_ReadNext(&data)) {
+		UART_OutChar(data);
+	}
+	
+	status = eFile_RClose();
+	if (status) {
+		printf("Failed to close \n\r  ");
+		return 1;
+	}
+  printf("Finished read \n\r");
+	return 0;
+}
+
+//---------- eFile_AllFiles-----------------
+// Print the name of all files in the directory
+// Input: none
+// Output: -1 if internal error; otherwise, actual number of files
+char const stringA[]="Filename = %s";
+char const stringB[]="File size = %lu bytes";
+char const stringC[]="Number of Files = %u";
+char const stringD[]="Number of Bytes = %lu";
+int eFile_AllFiles() { 
+	char *name; 
+	unsigned long size;
+  if(eFile_DOpen()) return -1;
+	unsigned int num = 0;
+  unsigned long total = 0;
+  while(!eFile_DirNext(&name, &size)){
+    printf(stringA, name);
+    printf("  ");
+    printf(stringB, size);
+    printf("\n\r");
+    total = total+size;
+    num++;    
+  }
+  printf(stringC, num);
+  printf("\n\r");
+  printf(stringD, total);
+  printf("\n\r");
+  if(eFile_DClose()) return -1;
+	return num;
 }

@@ -34,9 +34,10 @@ void ContextSwitch(void);
 // Performance Measurements 
 int32_t MaxJitter = 0;             // largest time jitter between interrupts in usec
 int32_t MaxJitter2 = 0;
+char* cmdInput;
 #define JITTERSIZE 64
-#define NUMTHREAD 10
-#define STACKSIZE 256
+#define NUMTHREAD 32
+#define STACKSIZE 128
 #define RUN 0
 #define ACTIVE 1
 #define SLEEP 2
@@ -44,6 +45,7 @@ int32_t MaxJitter2 = 0;
 #define FifoBufferSize 32
 #define TASKSLOT 8
 
+uint32_t OUTPUTMODE;
 
 uint32_t const JitterSize=JITTERSIZE;
 uint32_t JitterHistogram[JITTERSIZE]={0,};
@@ -287,6 +289,7 @@ void OS_Init(void){
 	PreISRDisableTime = 0;
 	MaxISRDisableTime = 0;
 	TotalISRDisableTime = 0;
+	OUTPUTMODE = OUTPUT_UART;
 }; 
 
 
@@ -459,7 +462,35 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
   EndCritical(status);   
   return 1; // replace this line with solution
 };
-					
+			
+
+int OS_AddParamThread(void(*task)(char *param), char *param, uint32_t stackSize, uint32_t priority){
+	uint32_t threadID;
+	uint32_t status;
+  // put Lab 2 (and beyond) solution here
+	status = StartCritical();
+	if(restoreTcbStackPt>=0){ 								// use restored tcb or not
+		threadID = restoredTcbStack[restoreTcbStackPt];
+		restoreTcbStackPt--;
+	}else{
+		threadID = threadIdMax;
+		if(threadIdMax+1==NUMTHREAD){
+			EndCritical(status);   
+			return 1; // replace this line with solution
+		}
+		threadIdMax++;
+	}
+	tcbs[threadID].id = threadID;			  // set the id field of the node
+	tcbs[threadID].priority = priority;  // set the priority field of the node
+	tcbs[threadID].blockSemaPt = NULL;
+	OS_SetInitialStack(threadID);
+	Stacks[threadID][STACKSIZE-8] = (int32_t) param;   // R0 
+	Stacks[threadID][STACKSIZE-2] = (int32_t)(task); // PC
+	insertPriorityHelper(&HeadPt, &tcbs[threadID]);
+	threadID++;	// increment thread id for future new threads
+  EndCritical(status);   
+  return 1; // replace this line with solution
+};
 //******** OS_AddProcess *************** 
 // add a process with foregound thread to the scheduler
 // Inputs: pointer to a void/void entry point
@@ -939,7 +970,13 @@ void OS_Launch(uint32_t theTimeSlice){
 // redirect terminal I/O to UART
 
 int fputc (int ch, FILE *f) { 
-  UART_OutChar(ch);
+	if (OUTPUTMODE == OUTPUT_UART) {
+	  UART_OutChar(ch);
+	} else if (OUTPUTMODE == OUTPUT_FILE) {
+		eFile_Write(ch);
+	} else if (OUTPUTMODE == OUTPUT_LCD) {
+		ST7735_OutChar(ch);
+	}
   return ch; 
 }
 
@@ -950,20 +987,25 @@ int fgetc (FILE *f){
 }
 
 int OS_RedirectToFile(char *name){
-  
-  return 1;
+  // mount dir and fat from disk
+  if(eFile_Mount()) return 1;
+	if(eFile_Create(name)) return 1;
+	if(eFile_WOpen(name)) return 1;
+	OUTPUTMODE = OUTPUT_FILE;
+  return 0;
 }
 int OS_RedirectToUART(void){
-  
-  return 1;
+	OUTPUTMODE = OUTPUT_UART;
+  return 0;
 }
 
 int OS_RedirectToST7735(void){
-  
-  return 1;
+  OUTPUTMODE = OUTPUT_LCD;
+  return 0;
 }
 
 int OS_EndRedirectToFile(void){
-  
-  return 1;
+  if(eFile_WClose()) return 1;
+	OUTPUTMODE = OUTPUT_UART;
+  return 0;
 }

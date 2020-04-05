@@ -21,6 +21,7 @@
 
 char cmd_buffer[CMD_BUFFER_SIZE];  // global to assist in debugging
 
+extern char* cmdInput;
 extern int32_t MaxJitter;
 extern uint32_t NumCreated;
 extern uint32_t DataLost;
@@ -58,6 +59,21 @@ void Jitter2(int32_t MaxJitter, uint32_t const JitterSize, uint32_t JitterHistog
 	OutCRLF();
 }
 
+void FormatTask(void) {
+	DSTATUS status = eFile_Format();
+	if (status) {
+    UART_OutString("File formatting failed"); 
+	} else {
+		UART_OutString("File formatting succeeded"); 
+	}
+	OS_Kill();
+}
+
+void ReadFileTask(char *param) {
+	eFile_ReadFile(cmdInput);
+	OS_Kill();
+}
+
 //---------------------Output help instructions---------------------
 // Output help instructions
 // Input: none
@@ -74,6 +90,9 @@ void Output_Help(void){
 	UART_OutString("get_metrics: output the performance metrics, use it only in Lab2"); OutCRLF(); OutCRLF();
 	UART_OutString("get_systime: output the total and max system runtime during ISR disabled"); OutCRLF(); OutCRLF();
 	UART_OutString("reset_systime: reset the total and max system runtime"); OutCRLF(); OutCRLF();	
+	UART_OutString("read_file, [1]: read the content in an given file"); OutCRLF(); OutCRLF();
+	UART_OutString("format_file : clear all files and data in the disk"); OutCRLF(); OutCRLF();
+	UART_OutString("show_files : print all file names in the directory"); OutCRLF(); OutCRLF();
 }
 
 //---------------------Call lcd function---------------------
@@ -87,6 +106,8 @@ void Call_LCD(char * (cmd[])){
 	ST7735_Message(side, line, cmd[2], value);
 	UART_OutString("Finished"); OutCRLF();
 }
+
+int OS_AddParamThread(void(*task)(char *param), char *param, uint32_t stackSize, uint32_t priority);
 
 //---------------------CMD Parser---------------------
 // Parse the string to specific command and execute it
@@ -145,7 +166,14 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		MaxISRDisableTime = 0;
 		TotalISRDisableTime = 0;
 		UART_OutString("Finished"); OutCRLF();	       
-	}else{
+	}else if(!strcmp("read_file", cmd[0])) {
+		memcpy(cmdInput, cmd[1], sizeof(char *));
+		OS_AddParamThread(&ReadFileTask, cmd[1], 128, 0); OutCRLF();
+	}else if (!strcmp("format_file", cmd[0])) {
+		OS_AddThread(&FormatTask, 128, 0); OutCRLF();
+	} else if(!strcmp("show_files", cmd[0])) {
+		eFile_AllFiles(); OutCRLF();
+	} else {
 		UART_OutString("Invalid command"); OutCRLF();
 	}
 }

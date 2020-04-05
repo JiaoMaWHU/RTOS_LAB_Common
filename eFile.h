@@ -140,5 +140,20 @@ int eFile_DClose(void);
  */
 int eFile_Close(void);
 
+/**
+ * @details Print info in a file
+ * @param  file name
+ * @return 0 if successful and 1 on failure (e.g., trouble writing to flash)
+ * @brief  read file
+ */
+int eFile_ReadFile(const char name[]);
+
+/**
+ * @details Print all files name in the directory
+ * @param  none
+ * @return -1 internal error; otherwise, actual number of files
+ * @brief  print all file names
+ */
+int eFile_AllFiles(void);
 #define _EFILE
 #endif
