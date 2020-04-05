@@ -83,6 +83,21 @@ int cmp_fat_pointer(int id, WORD* pointer){
 	return memcmp(&eFile_fat[id * BYTE_PER_FAT_ENTRY], pointer, BYTE_PER_FAT_ENTRY);
 }
 
+// read block size
+int get_block_size(WORD fat_id) {
+	BYTE buffer[512];
+	int size = 0;
+		// save file fat id
+	// read the last block into buffer
+	DSTATUS status = eDisk_ReadBlock(buffer, fat_id+START_BLOCK_OF_FILE);
+	if (status) return 1;
+	for (int i = 0; i < 512; i++) {
+		if (buffer[i] == END_OF_TEXT) break;
+		size++;
+	}
+	return size;
+}
+
 //---------- alloc_fat_space-----------------
 // Allocate free space in fat
 // Input: size of free space
@@ -229,16 +244,33 @@ int eFile_Create( const char name[]){  // create new file, make it empty
 	
 	// fill one entry, select the first
 	WORD index;
+	
+	// find same name file
 	for(index = 0; index<SIZE_DIR_ENTRIES-1; index++){
-		if(eFile_directory[index*(BYTE_PER_DIR_ENTRY)] == 0){
+		if(!cmp_dir_entry_filename(index, (BYTE*)name)){
 			break;
 		}
 	}
-	// full directory
-	if(index == SIZE_DIR_ENTRIES-1){
-		return 1;
+	
+	if (index < SIZE_DIR_ENTRIES-1) {
+		status = eFile_Delete(name);
+		// failed to remove
+		if (status) {
+			return 1;
+		}
+	} else {
+		// no file with duplicate name
+		for(index = 0; index<SIZE_DIR_ENTRIES-1; index++){
+		  if(eFile_directory[index*(BYTE_PER_DIR_ENTRY)] == 0){
+			  break;
+		  }
+	  }
 	}
 	
+	// full directory
+	if(index == SIZE_DIR_ENTRIES-1){
+    return 1;
+  }
 	// get one block free space
 	WORD start = alloc_fat_space(1);
 	if(start==(SIZE_FAT_ENTRIES)){
@@ -506,7 +538,7 @@ int eFile_Delete(const char name[]){  // remove this file
 	}
 	if(i==(SIZE_DIR_ENTRIES-1)){
 		// no such file
-		return 1;
+		return 2;
 	}
 	
 	// clear file block
@@ -614,14 +646,15 @@ int eFile_DirNext( char *name[], unsigned long *size){  // get next entry
 	(*name) = (char *)&eFile_directory[i * BYTE_PER_DIR_ENTRY];
 	
 	// change the size
-	int size_ = 1;
+	int size_ = 0;
 	WORD next;
 	get_dir_entry(i, NULL, &next);
 	while(TRUE){
-		size_++;
 		if(!cmp_fat_pointer(next, &FAT_END_FLAG)){
+			size_ += get_block_size(next);
 			break;
 		}
+	  size_+=512;
 		get_fat_pointer(next, &next);
 	}
 	
@@ -717,7 +750,7 @@ int eFile_ReadFile(const char name[]) {
 		printf("Failed to close \n\r  ");
 		return 1;
 	}
-  printf("Finished read \n\r");
+  printf("\n\r Finished read \n\r");
 	return 0;
 }
 

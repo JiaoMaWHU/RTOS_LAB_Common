@@ -75,6 +75,34 @@ void ReadFileTask(void) {
 	OS_Kill();
 }
 
+void DeleteFileTask(void) {
+	// mount fat and dir
+	DSTATUS status = eFile_Mount();
+	if (status) {
+		UART_OutString("Failed to mount"); 
+	  OutCRLF();
+		OS_Kill();
+	}
+	
+	status = eFile_Delete(cmdInput);
+	if (status == 1) {
+	  UART_OutString("Delete failed"); 
+	} else if (status == 0) {
+	  UART_OutString("Delete succeeded"); 	
+	} else if (status == 2) {
+		UART_OutString("No such file"); 
+	}
+	eFile_Close();
+	memset(cmdInput, 0, BYTE_PER_DIR_ENTRY_NAME);
+	OutCRLF();
+	OS_Kill();
+}
+
+void ReadAllFiles(void) {
+  eFile_AllFiles();
+	OS_Kill();
+};
+
 //---------------------Output help instructions---------------------
 // Output help instructions
 // Input: none
@@ -92,6 +120,7 @@ void Output_Help(void){
 	UART_OutString("get_systime: output the total and max system runtime during ISR disabled"); OutCRLF(); OutCRLF();
 	UART_OutString("reset_systime: reset the total and max system runtime"); OutCRLF(); OutCRLF();	
 	UART_OutString("read_file, [1]: read the content in an given file"); OutCRLF(); OutCRLF();
+	UART_OutString("delete_file, [1]: remove a given file"); OutCRLF(); OutCRLF();
 	UART_OutString("format_file : clear all files and data in the disk"); OutCRLF(); OutCRLF();
 	UART_OutString("show_files : print all file names in the directory"); OutCRLF(); OutCRLF();
 }
@@ -168,10 +197,13 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 	}else if(!strcmp("read_file", cmd[0])) {
 		memcpy(cmdInput, cmd[1], BYTE_PER_DIR_ENTRY_NAME);
 		OS_AddThread(&ReadFileTask, 128, 0); OutCRLF();
+	} else if(!strcmp("delete_file", cmd[0])) {
+		memcpy(cmdInput, cmd[1], BYTE_PER_DIR_ENTRY_NAME);
+		OS_AddThread(&DeleteFileTask, 128, 0); OutCRLF();
 	}else if (!strcmp("format_file", cmd[0])) {
 		OS_AddThread(&FormatTask, 128, 0); OutCRLF();
 	} else if(!strcmp("show_files", cmd[0])) {
-			eFile_AllFiles(); OutCRLF();
+		OS_AddThread(&ReadAllFiles,128,0); OutCRLF();
 	} else {
 		UART_OutString("Invalid command"); OutCRLF();
 	}
