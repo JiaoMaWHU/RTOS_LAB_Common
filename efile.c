@@ -729,12 +729,25 @@ char const stringA[]="Filename = %s";
 char const stringB[]="File size = %lu bytes";
 char const stringC[]="Number of Files = %u";
 char const stringD[]="Number of Bytes = %lu";
-int eFile_AllFiles() { 
-	char *name; 
+int eFile_AllFiles(void) {
+  DSTATUS status = eFile_DOpen();
+	if (status) {
+		printf("Failed to load dir \n\r");
+		return 1;
+	}
+	
+	// mount the fat table
+	status = eFile_Mount();
+	if (status) {
+		printf("Failed to mount \n\r");
+		return 1;
+	}
+	
+	char* name = ""; 
 	unsigned long size;
-  if(eFile_DOpen()) return -1;
 	unsigned int num = 0;
   unsigned long total = 0;
+	
   while(!eFile_DirNext(&name, &size)){
     printf(stringA, name);
     printf("  ");

@@ -21,7 +21,7 @@
 
 char cmd_buffer[CMD_BUFFER_SIZE];  // global to assist in debugging
 
-extern char* cmdInput;
+extern char cmdInput[BYTE_PER_DIR_ENTRY_NAME];
 extern int32_t MaxJitter;
 extern uint32_t NumCreated;
 extern uint32_t DataLost;
@@ -69,8 +69,9 @@ void FormatTask(void) {
 	OS_Kill();
 }
 
-void ReadFileTask(char *param) {
+void ReadFileTask(void) {
 	eFile_ReadFile(cmdInput);
+	memset(cmdInput, 0, BYTE_PER_DIR_ENTRY_NAME);
 	OS_Kill();
 }
 
@@ -106,8 +107,6 @@ void Call_LCD(char * (cmd[])){
 	ST7735_Message(side, line, cmd[2], value);
 	UART_OutString("Finished"); OutCRLF();
 }
-
-int OS_AddParamThread(void(*task)(char *param), char *param, uint32_t stackSize, uint32_t priority);
 
 //---------------------CMD Parser---------------------
 // Parse the string to specific command and execute it
@@ -167,12 +166,12 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		TotalISRDisableTime = 0;
 		UART_OutString("Finished"); OutCRLF();	       
 	}else if(!strcmp("read_file", cmd[0])) {
-		memcpy(cmdInput, cmd[1], sizeof(char *));
-		OS_AddParamThread(&ReadFileTask, cmd[1], 128, 0); OutCRLF();
+		memcpy(cmdInput, cmd[1], BYTE_PER_DIR_ENTRY_NAME);
+		OS_AddThread(&ReadFileTask, 128, 0); OutCRLF();
 	}else if (!strcmp("format_file", cmd[0])) {
 		OS_AddThread(&FormatTask, 128, 0); OutCRLF();
 	} else if(!strcmp("show_files", cmd[0])) {
-		eFile_AllFiles(); OutCRLF();
+			eFile_AllFiles(); OutCRLF();
 	} else {
 		UART_OutString("Invalid command"); OutCRLF();
 	}
