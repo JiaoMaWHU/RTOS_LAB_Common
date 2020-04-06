@@ -253,11 +253,8 @@ int eFile_Create( const char name[]){  // create new file, make it empty
 	}
 	
 	if (index < SIZE_DIR_ENTRIES-1) {
-		status = eFile_Delete(name);
-		// failed to remove
-		if (status) {
-			return 1;
-		}
+		// file already existed just return
+		return 0;
 	} else {
 		// no file with duplicate name
 		for(index = 0; index<SIZE_DIR_ENTRIES-1; index++){
