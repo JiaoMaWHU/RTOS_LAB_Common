@@ -35,6 +35,7 @@ void ContextSwitch(void);
 int32_t MaxJitter = 0;             // largest time jitter between interrupts in usec
 int32_t MaxJitter2 = 0;
 char cmdInput[BYTE_PER_DIR_ENTRY_NAME];
+char cmdInput2[128];
 #define JITTERSIZE 64
 #define NUMTHREAD 32
 #define STACKSIZE 128

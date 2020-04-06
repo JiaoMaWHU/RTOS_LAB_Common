@@ -17,11 +17,12 @@
 #include "../RTOS_Labs_common/eDisk.h"
 #include "../RTOS_Labs_common/eFile.h"
 
-#define CMD_BUFFER_SIZE 32
+#define CMD_BUFFER_SIZE 128
 
 char cmd_buffer[CMD_BUFFER_SIZE];  // global to assist in debugging
 
 extern char cmdInput[BYTE_PER_DIR_ENTRY_NAME];
+extern char cmdInput2[128];
 extern int32_t MaxJitter;
 extern uint32_t NumCreated;
 extern uint32_t DataLost;
@@ -70,8 +71,25 @@ void FormatTask(void) {
 	OS_Kill();
 }
 
+void CreateFileTask(void) {
+	DSTATUS status = eFile_Create(cmdInput);
+	if (status) UART_OutString("Create failed");
+	printf("Create %s succeeded \n\r",cmdInput); 
+	memset(cmdInput, 0, BYTE_PER_DIR_ENTRY_NAME);
+	OS_Kill();
+}
+
 void ReadFileTask(void) {
 	eFile_ReadFile(cmdInput);
+	memset(cmdInput, 0, BYTE_PER_DIR_ENTRY_NAME);
+	OS_Kill();
+}
+
+void WriteFileTask(void) {
+	OS_RedirectToFile(cmdInput);
+  printf("%s",cmdInput2);
+  OS_EndRedirectToFile();
+	printf("Write %s succeeded \n\r",cmdInput); 
 	memset(cmdInput, 0, BYTE_PER_DIR_ENTRY_NAME);
 	OS_Kill();
 }
@@ -119,7 +137,9 @@ void Output_Help(void){
 	UART_OutString("get_metrics: output the performance metrics, use it only in Lab2"); OutCRLF(); OutCRLF();
 	UART_OutString("get_systime: output the total and max system runtime during ISR disabled"); OutCRLF(); OutCRLF();
 	UART_OutString("reset_systime: reset the total and max system runtime"); OutCRLF(); OutCRLF();	
+	UART_OutString("create_file, [1]: create a file with given name"); OutCRLF(); OutCRLF();
 	UART_OutString("read_file, [1]: read the content in an given file"); OutCRLF(); OutCRLF();
+	UART_OutString("write_file, [1], [2]: write to a file with name [1] with content [2]"); OutCRLF(); OutCRLF();
 	UART_OutString("delete_file, [1]: remove a given file"); OutCRLF(); OutCRLF();
 	UART_OutString("format_file : clear all files and data in the disk"); OutCRLF(); OutCRLF();
 	UART_OutString("show_files : print all file names in the directory"); OutCRLF(); OutCRLF();
@@ -194,21 +214,30 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		MaxISRDisableTime = 0;
 		TotalISRDisableTime = 0;
 		UART_OutString("Finished"); OutCRLF();	       
+	}else if(!strcmp("create_file", cmd[0])) {
+		memcpy(cmdInput, cmd[1], strlen(cmd[1]));
+		OS_AddThread(&CreateFileTask, 128, 0);
+		OS_Suspend();
 	}else if(!strcmp("read_file", cmd[0])) {
-		memcpy(cmdInput, cmd[1], BYTE_PER_DIR_ENTRY_NAME);
+		memcpy(cmdInput, cmd[1], strlen(cmd[1]));
 		OS_AddThread(&ReadFileTask, 128, 0);
 		OS_Suspend();
-	} else if(!strcmp("delete_file", cmd[0])) {
-		memcpy(cmdInput, cmd[1], BYTE_PER_DIR_ENTRY_NAME);
+	}else if(!strcmp("write_file", cmd[0])) {
+		memcpy(cmdInput, cmd[1], strlen(cmd[1]));
+		memcpy(cmdInput2, cmd[2], strlen(cmd[2]));
+		OS_AddThread(&WriteFileTask, 128, 0);
+		OS_Suspend();
+	}else if(!strcmp("delete_file", cmd[0])) {
+		memcpy(cmdInput, cmd[1], strlen(cmd[1]));
 		OS_AddThread(&DeleteFileTask, 128, 0);
 		OS_Suspend();
 	}else if (!strcmp("format_file", cmd[0])) {
 		OS_AddThread(&FormatTask, 128, 0);
 		OS_Suspend();
-	} else if(!strcmp("show_files", cmd[0])) {
+	}else if(!strcmp("show_files", cmd[0])) {
 		OS_AddThread(&ReadAllFiles,128,0);
 		OS_Suspend();
-	} else {
+	}else {
 		UART_OutString("Invalid command"); OutCRLF();
 	}
 }
