@@ -278,6 +278,8 @@ int eFile_Create( const char name[]){  // create new file, make it empty
 	// write to disk after a file is created
 	eDisk_WriteBlock(eFile_directory,0);
 	
+	// write the fat back
+	status = eDisk_Write(DRIVE_NUM, eFile_fat, 1, (SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY)/512);
   return 0;   // replace
 }
 
