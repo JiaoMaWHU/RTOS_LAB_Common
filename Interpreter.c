@@ -66,6 +66,7 @@ void FormatTask(void) {
 	} else {
 		UART_OutString("File formatting succeeded"); 
 	}
+	OutCRLF();
 	OS_Kill();
 }
 
@@ -80,7 +81,6 @@ void DeleteFileTask(void) {
 	DSTATUS status = eFile_Mount();
 	if (status) {
 		UART_OutString("Failed to mount"); 
-	  OutCRLF();
 		OS_Kill();
 	}
 	
@@ -196,14 +196,18 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		UART_OutString("Finished"); OutCRLF();	       
 	}else if(!strcmp("read_file", cmd[0])) {
 		memcpy(cmdInput, cmd[1], BYTE_PER_DIR_ENTRY_NAME);
-		OS_AddThread(&ReadFileTask, 128, 0); OutCRLF();
+		OS_AddThread(&ReadFileTask, 128, 0);
+		OS_Suspend();
 	} else if(!strcmp("delete_file", cmd[0])) {
 		memcpy(cmdInput, cmd[1], BYTE_PER_DIR_ENTRY_NAME);
-		OS_AddThread(&DeleteFileTask, 128, 0); OutCRLF();
+		OS_AddThread(&DeleteFileTask, 128, 0);
+		OS_Suspend();
 	}else if (!strcmp("format_file", cmd[0])) {
-		OS_AddThread(&FormatTask, 128, 0); OutCRLF();
+		OS_AddThread(&FormatTask, 128, 0);
+		OS_Suspend();
 	} else if(!strcmp("show_files", cmd[0])) {
-		OS_AddThread(&ReadAllFiles,128,0); OutCRLF();
+		OS_AddThread(&ReadAllFiles,128,0);
+		OS_Suspend();
 	} else {
 		UART_OutString("Invalid command"); OutCRLF();
 	}

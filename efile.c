@@ -737,7 +737,7 @@ int eFile_ReadFile(const char name[]) {
 	// open file
 	status = eFile_ROpen(name);
 	if (status) {
-		printf("Error! File not found \n\r  ");
+		printf("Error! File not found \n\r");
 		return 1;
 	}
 	
@@ -747,10 +747,10 @@ int eFile_ReadFile(const char name[]) {
 	
 	status = eFile_RClose();
 	if (status) {
-		printf("Failed to close \n\r  ");
+		printf("Failed to close \n\r");
 		return 1;
 	}
-  printf("\n\r Finished read \n\r");
+	printf("\n\r");
 	return 0;
 }
 
