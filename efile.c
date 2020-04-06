@@ -4,9 +4,11 @@
 // Jonathan W. Valvano 1/12/20
 #include <stdint.h>
 #include <string.h>
+#include <stdbool.h>
 #include "../RTOS_Labs_common/OS.h"
 #include "../RTOS_Labs_common/eFile.h"
 #include "../RTOS_Labs_common/eDisk.h"
+#include "../RTOS_Labs_common/UART0int.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -46,16 +48,24 @@ void set_dir_entry(int id, const BYTE* filename, WORD* pointer){
 }
 
 void get_free_pointer(WORD* pointer){
-	memcpy(&pointer, &eFile_directory[SIZE_DIR_ENTRIES*BYTE_PER_DIR_ENTRY-2], 2);
+	memcpy(pointer, &eFile_directory[SIZE_DIR_ENTRIES*BYTE_PER_DIR_ENTRY-2], 2);
 }
 
 void set_free_pointer(WORD* pointer){
-	memcpy(&eFile_directory[SIZE_DIR_ENTRIES*BYTE_PER_DIR_ENTRY-2], &pointer, 2);
+	memcpy(&eFile_directory[SIZE_DIR_ENTRIES*BYTE_PER_DIR_ENTRY-2], pointer, 2);
 }
 
 int cmp_dir_entry_filename(int id, const BYTE* cmp_filename){
 	// return 0 if equal, otherwise logical 1
 	return memcmp(&eFile_directory[id*(BYTE_PER_DIR_ENTRY)], cmp_filename, BYTE_PER_DIR_ENTRY_NAME);
+}
+
+int empty_entry_filename(int id){
+	// return 1 if file name is empty, otherwise logical 0
+	for (int i = 0; i < BYTE_PER_DIR_ENTRY_NAME; i++) {
+		if (eFile_directory[id*(BYTE_PER_DIR_ENTRY)+i] != 0) return 0;
+	}
+	return 1;
 }
 
 // util of fat array
@@ -73,6 +83,21 @@ int cmp_fat_pointer(int id, WORD* pointer){
 	return memcmp(&eFile_fat[id * BYTE_PER_FAT_ENTRY], pointer, BYTE_PER_FAT_ENTRY);
 }
 
+// read block size
+int get_block_size(WORD fat_id) {
+	BYTE buffer[512];
+	int size = 0;
+		// save file fat id
+	// read the last block into buffer
+	DSTATUS status = eDisk_ReadBlock(buffer, fat_id+START_BLOCK_OF_FILE);
+	if (status) return 1;
+	for (int i = 0; i < 512; i++) {
+		if (buffer[i] == END_OF_TEXT) break;
+		size++;
+	}
+	return size;
+}
+
 //---------- alloc_fat_space-----------------
 // Allocate free space in fat
 // Input: size of free space
@@ -88,6 +113,7 @@ WORD alloc_fat_space(int size){
 		count++;
 		last = next;
 		if(count==size){ // enough space, 
+			get_fat_pointer(next, &next);
 			set_fat_pointer(last, &FAT_END_FLAG); // last entry 
 			set_free_pointer(&next);
 			break;
@@ -144,13 +170,6 @@ int eFile_Format(void){ // erase disk, add format
 	memset(eFile_directory, 0, sizeof(eFile_directory));
 	memset(eFile_fat, 0, sizeof(eFile_fat));
 	
-	printf("Size of eFile_directory: %i \r\n", sizeof(eFile_directory));
-	printf("Size of eFile_fat: %i \r\n", sizeof(eFile_fat));
-	
-	// set the first directory entry
-//	WORD first_dir_entry = 0;
-//	memcpy(&eFile_directory[6], &first_dir_entry, 2);
-	
 	// format the fat
 	WORD index = 0;
 	for(WORD i = 0; i<(SIZE_FAT_ENTRIES-1); i++){
@@ -165,21 +184,29 @@ int eFile_Format(void){ // erase disk, add format
 	BYTE empty_buffer[512];
 	memset(empty_buffer, 0, sizeof(empty_buffer));
 	
+	// wipe disk
 	for(int i=0; i<(SIZE_FAT_ENTRIES); i++){
 		status = eDisk_WriteBlock(empty_buffer, i+START_BLOCK_OF_FILE);
 		if(status){
 			return 1;
 		}
 	}
-	status = eFile_Close();
+	
+	// write formated dir and fat to disk
+	status = eDisk_WriteBlock(eFile_directory, 0);
+	if(status){
+		return 1;
+	}
+	// write fat to disk
+  status = eDisk_Write(DRIVE_NUM, eFile_fat, 1, (SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY)/512);
 	if(status){
 		return 1;
 	}
 	
-	status = eFile_DClose();
-	if(status){
-		return 1;
-	}
+	memset(eFile_writer_buffer, 0, sizeof(eFile_writer_buffer));
+	memset(eFile_reader_buffer, 0, sizeof(eFile_reader_buffer));
+	writer_buf_end_id = -1;
+	reader_buf_read_id = -1;
 	
   return 0;   // replace
 }
@@ -195,6 +222,8 @@ int eFile_Mount(void){ // initialize file system
 	if(status){
 		return 1;
 	}
+	// mount file directory
+	status = eFile_DOpen();
 	status = eDisk_Read(DRIVE_NUM, eFile_fat, 1, (SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY)/512);
 	if(status){
 		return 1;
@@ -215,22 +244,39 @@ int eFile_Create( const char name[]){  // create new file, make it empty
 	
 	// fill one entry, select the first
 	WORD index;
+	
+	// find same name file
 	for(index = 0; index<SIZE_DIR_ENTRIES-1; index++){
-		if(!cmp_dir_entry_filename(index, emptyFileName)){
+		if(!cmp_dir_entry_filename(index, (BYTE*)name)){
 			break;
 		}
 	}
-	// full directory
-	if(index == SIZE_DIR_ENTRIES-1){
-		return 1;
+	
+	if (index < SIZE_DIR_ENTRIES-1) {
+		// file already existed just return
+		return 0;
+	} else {
+		// no file with duplicate name
+		for(index = 0; index<SIZE_DIR_ENTRIES-1; index++){
+		  if(eFile_directory[index*(BYTE_PER_DIR_ENTRY)] == 0){
+			  break;
+		  }
+	  }
 	}
 	
+	// full directory
+	if(index == SIZE_DIR_ENTRIES-1){
+    return 1;
+  }
 	// get one block free space
 	WORD start = alloc_fat_space(1);
 	if(start==(SIZE_FAT_ENTRIES)){
 		return 1;
 	}
 	set_dir_entry(index, (BYTE*)name, &start);
+	
+	// write to disk after a file is created
+	eDisk_WriteBlock(eFile_directory,0);
 	
   return 0;   // replace
 }
@@ -273,7 +319,8 @@ int eFile_WOpen( const char name[]){      // open a file for writing
 	file_written_fat_id = next;
 	
 	// read the last block into buffer
-	status = eDisk_ReadBlock(eFile_writer_buffer, next+START_BLOCK_OF_FILE);
+	status = eDisk_ReadBlock(eFile_writer_buffer, file_written_fat_id+START_BLOCK_OF_FILE);
+	
 	if(status){
 		OS_Signal(&writerSema);
 		return 1;
@@ -299,6 +346,7 @@ int eFile_Write( const char data){
 			if(eFile_writer_buffer[i]==END_OF_TEXT){
 				break;
 			}
+			i += 1;
 		}
 		writer_buf_end_id = i;
 	}
@@ -314,6 +362,7 @@ int eFile_Write( const char data){
 		
 		// allocate a new block
 		WORD next = alloc_fat_space(1);
+		
 		// set the pointer of the end fat entry to a new entry
 		set_fat_pointer(file_written_fat_id, &next);
 		
@@ -349,7 +398,14 @@ int eFile_WClose(void){ // close the file for writing
 	}
 	
 	// write the fat back
-	status = eFile_Close();
+	status = eDisk_Write(DRIVE_NUM, eFile_fat, 1, (SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY)/512);
+	if(status){
+		OS_Signal(&writerSema);
+		return 1;
+	}
+	
+	// write the directory back
+	status = eDisk_WriteBlock(eFile_directory, 0);
 	if(status){
 		OS_Signal(&writerSema);
 		return 1;
@@ -479,7 +535,7 @@ int eFile_Delete(const char name[]){  // remove this file
 	}
 	if(i==(SIZE_DIR_ENTRIES-1)){
 		// no such file
-		return 1;
+		return 2;
 	}
 	
 	// clear file block
@@ -507,6 +563,9 @@ int eFile_Delete(const char name[]){  // remove this file
 	
 	// clear directory
 	memset(&eFile_directory[i*BYTE_PER_DIR_ENTRY], 0, BYTE_PER_DIR_ENTRY);
+	
+	// update directory after deletion 
+	eDisk_WriteBlock(eFile_directory,0);
   return 0;   // replace
 }                             
 
@@ -525,6 +584,7 @@ int eFile_DOpen(void){ // open directory
 	if(status){
 		return 1;
 	}
+	
   return 0;   // replace
 }
   
@@ -539,31 +599,59 @@ int eFile_DirNext( char *name[], unsigned long *size){  // get next entry
 		return 1;
 	}
 	
+	bool nameEmpty = FALSE;
+	
+	// empty input name ""
+	if (*name[0] == 0) {
+		nameEmpty = TRUE;
+	}
+	
 	// find the file entry in directory
 	int i;
 	for(i=0; i<SIZE_DIR_ENTRIES-1; i++){
-		if(!cmp_dir_entry_filename(i, (BYTE*)(*name))){
-			break;
+		if (nameEmpty) {
+			// find first name entry that is not empty string
+			if (!empty_entry_filename(i)) {
+				break;
+			}
+		} else {
+			// find the entry that matches the input name
+			if(!cmp_dir_entry_filename(i, (BYTE*)(*name))){
+				break;
+			}
 		}
 	}
+
+	// to find the next not empty entry name
+	if (!nameEmpty) {
+    // index after the last non-empty entry
+		i = i + 1;
+		while (i < (SIZE_DIR_ENTRIES-1)) {
+      if (!empty_entry_filename(i)) {
+        break;
+      }
+      i++;
+    }
+  }
+	
 	if(i==(SIZE_DIR_ENTRIES-1)){
-		// no such file or no next file
+		// no such file or no next file or no files exist
 		return 1;
 	}
 	
 	// change the filename to next file
-	i=i+1;
 	(*name) = (char *)&eFile_directory[i * BYTE_PER_DIR_ENTRY];
 	
 	// change the size
-	int size_ = 1;
+	int size_ = 0;
 	WORD next;
 	get_dir_entry(i, NULL, &next);
 	while(TRUE){
-		size_++;
 		if(!cmp_fat_pointer(next, &FAT_END_FLAG)){
+			size_ += get_block_size(next);
 			break;
 		}
+	  size_+=512;
 		get_fat_pointer(next, &next);
 	}
 	
@@ -581,6 +669,7 @@ int eFile_DClose(void){ // close the directory
 		return 1;
 	}
   status = eDisk_WriteBlock(eFile_directory, 0);
+	status = eDisk_ReadBlock(eFile_directory, 0);
 	if(status){
 		return 1;
 	}
@@ -593,13 +682,114 @@ int eFile_DClose(void){ // close the directory
 // Input: none
 // Output: 0 if successful and 1 on failure (not currently open)
 int eFile_Close(void){
-	DSTATUS status = eFile_Init();
+	DSTATUS status;
+	if (readerCounter > 0) {
+		status = eFile_RClose();
+	}
 	if(status){
 		return 1;
 	}
+	// write directory to disk
+	status = eDisk_WriteBlock(eFile_directory, 0);
+	if(status){
+		return 1;
+	}
+	// write fat to disk
   status = eDisk_Write(DRIVE_NUM, eFile_fat, 1, (SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY)/512);
 	if(status){
 		return 1;
 	}
-  return 0;   // replace
+	
+	// reset all relative data in RAM to default (deactivating)
+	memset(eFile_directory, 0, sizeof(eFile_directory));
+	memset(eFile_fat, 0, sizeof(eFile_fat));
+	memset(eFile_writer_buffer, 0, sizeof(eFile_writer_buffer));
+	memset(eFile_reader_buffer, 0, sizeof(eFile_reader_buffer));
+	writer_buf_end_id = -1;
+	reader_buf_read_id = -1;
+  
+	return 0;   // replace
+}
+
+//---------- eFile_ReadFile-----------------
+// Read and print the content of an given file, closed file after read
+// Input: 
+// Output: 0 if successful and 1 on failure (not currently open)
+int eFile_ReadFile(const char name[]) {
+  // open dirctory to load directory from disk
+	char data;
+	
+	DSTATUS status = eFile_DOpen();
+	if (status) {
+		printf("Failed to load dir \n\r");
+		return 1;
+	}
+	
+	// mount the fat table
+	status = eFile_Mount();
+	if (status) {
+		return 1;
+	}
+	
+	// open file
+	status = eFile_ROpen(name);
+	if (status) {
+		printf("Error! File not found \n\r");
+		return 1;
+	}
+	
+	while (!eFile_ReadNext(&data)) {
+		UART_OutChar(data);
+	}
+	
+	status = eFile_RClose();
+	if (status) {
+		printf("Failed to close \n\r");
+		return 1;
+	}
+	printf("\n\r");
+	return 0;
+}
+
+//---------- eFile_AllFiles-----------------
+// Print the name of all files in the directory
+// Input: none
+// Output: -1 if internal error; otherwise, actual number of files
+char const stringA[]="Filename = %s";
+char const stringB[]="File size = %lu bytes";
+char const stringC[]="Number of Files = %u";
+char const stringD[]="Number of Bytes = %lu";
+int eFile_AllFiles(void) {
+  DSTATUS status = eFile_DOpen();
+	if (status) {
+		printf("Failed to load dir \n\r");
+		return 1;
+	}
+	
+	// mount the fat table
+	status = eFile_Mount();
+	if (status) {
+		printf("Failed to mount \n\r");
+		return 1;
+	}
+	
+	char* name = ""; 
+	unsigned long size;
+	unsigned int num = 0;
+  unsigned long total = 0;
+	
+  while(!eFile_DirNext(&name, &size)){
+    printf(stringA, name);
+    printf("  ");
+    printf(stringB, size);
+    printf("\n\r");
+    total = total+size;
+    num++;    
+  }
+  printf(stringC, num);
+  printf("\n\r");
+  printf(stringD, total);
+  printf("\n\r");
+  if(eFile_DClose()) return -1;
+	return num;
 }

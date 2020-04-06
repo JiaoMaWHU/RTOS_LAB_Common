@@ -21,6 +21,7 @@
 
 char cmd_buffer[CMD_BUFFER_SIZE];  // global to assist in debugging
 
+extern char cmdInput[BYTE_PER_DIR_ENTRY_NAME];
 extern int32_t MaxJitter;
 extern uint32_t NumCreated;
 extern uint32_t DataLost;
@@ -58,6 +59,50 @@ void Jitter2(int32_t MaxJitter, uint32_t const JitterSize, uint32_t JitterHistog
 	OutCRLF();
 }
 
+void FormatTask(void) {
+	DSTATUS status = eFile_Format();
+	if (status) {
+    UART_OutString("File formatting failed"); 
+	} else {
+		UART_OutString("File formatting succeeded"); 
+	}
+	OutCRLF();
+	OS_Kill();
+}
+
+void ReadFileTask(void) {
+	eFile_ReadFile(cmdInput);
+	memset(cmdInput, 0, BYTE_PER_DIR_ENTRY_NAME);
+	OS_Kill();
+}
+
+void DeleteFileTask(void) {
+	// mount fat and dir
+	DSTATUS status = eFile_Mount();
+	if (status) {
+		UART_OutString("Failed to mount"); 
+		OS_Kill();
+	}
+	
+	status = eFile_Delete(cmdInput);
+	if (status == 1) {
+	  UART_OutString("Delete failed"); 
+	} else if (status == 0) {
+	  UART_OutString("Delete succeeded"); 	
+	} else if (status == 2) {
+		UART_OutString("No such file"); 
+	}
+	eFile_Close();
+	memset(cmdInput, 0, BYTE_PER_DIR_ENTRY_NAME);
+	OutCRLF();
+	OS_Kill();
+}
+
+void ReadAllFiles(void) {
+  eFile_AllFiles();
+	OS_Kill();
+};
+
 //---------------------Output help instructions---------------------
 // Output help instructions
 // Input: none
@@ -74,6 +119,10 @@ void Output_Help(void){
 	UART_OutString("get_metrics: output the performance metrics, use it only in Lab2"); OutCRLF(); OutCRLF();
 	UART_OutString("get_systime: output the total and max system runtime during ISR disabled"); OutCRLF(); OutCRLF();
 	UART_OutString("reset_systime: reset the total and max system runtime"); OutCRLF(); OutCRLF();	
+	UART_OutString("read_file, [1]: read the content in an given file"); OutCRLF(); OutCRLF();
+	UART_OutString("delete_file, [1]: remove a given file"); OutCRLF(); OutCRLF();
+	UART_OutString("format_file : clear all files and data in the disk"); OutCRLF(); OutCRLF();
+	UART_OutString("show_files : print all file names in the directory"); OutCRLF(); OutCRLF();
 }
 
 //---------------------Call lcd function---------------------
@@ -145,7 +194,21 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		MaxISRDisableTime = 0;
 		TotalISRDisableTime = 0;
 		UART_OutString("Finished"); OutCRLF();	       
-	}else{
+	}else if(!strcmp("read_file", cmd[0])) {
+		memcpy(cmdInput, cmd[1], BYTE_PER_DIR_ENTRY_NAME);
+		OS_AddThread(&ReadFileTask, 128, 0);
+		OS_Suspend();
+	} else if(!strcmp("delete_file", cmd[0])) {
+		memcpy(cmdInput, cmd[1], BYTE_PER_DIR_ENTRY_NAME);
+		OS_AddThread(&DeleteFileTask, 128, 0);
+		OS_Suspend();
+	}else if (!strcmp("format_file", cmd[0])) {
+		OS_AddThread(&FormatTask, 128, 0);
+		OS_Suspend();
+	} else if(!strcmp("show_files", cmd[0])) {
+		OS_AddThread(&ReadAllFiles,128,0);
+		OS_Suspend();
+	} else {
 		UART_OutString("Invalid command"); OutCRLF();
 	}
 }

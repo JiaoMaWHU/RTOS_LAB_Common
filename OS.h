@@ -28,6 +28,10 @@
 #define TIME_250US  (TIME_1MS/5) 
 #define TIME_1US  (TIME_1MS/1000) 
 #define TIME_12_5NS 1		// 12.5 ns
+#define OUTPUT_UART 0
+#define OUTPUT_FILE 1
+#define OUTPUT_LCD  2
+
 
 struct tcb{
   int32_t *sp;       // pointer to stack (valid for threads not running
