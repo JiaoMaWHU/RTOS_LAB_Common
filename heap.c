@@ -28,7 +28,11 @@
 
 #include <stdint.h>
 #include "../RTOS_Labs_common/heap.h"
+#include <string.h>
+#include <stdlib.h> 
 
+heap_stats_t heap_stats;
+static int32_t heap[HEAP_SIZE];
 
 //******** Heap_Init *************** 
 // Initialize the Heap
@@ -37,8 +41,16 @@
 // notes: Initializes/resets the heap to a clean state where no memory
 //  is allocated.
 int32_t Heap_Init(void){
- 
-  return 1;   // replace
+	// init heap array
+	memset(heap, 0, sizeof(heap));
+	heap[0] = -(HEAP_SIZE-2);
+	heap[HEAP_SIZE-1] = -(HEAP_SIZE-2);
+	
+	// init heap_stats
+	heap_stats.free = (HEAP_SIZE-2)*sizeof(int32_t);
+	heap_stats.size = (HEAP_SIZE-2)*sizeof(int32_t);
+	heap_stats.used = 0;
+  return 0;   // replace
 }
 
 
@@ -49,7 +61,34 @@ int32_t Heap_Init(void){
 // output: void* pointing to the allocated memory or will return NULL
 //   if there isn't sufficient space to satisfy allocation request
 void* Heap_Malloc(int32_t desiredBytes){
- 
+	// search from the first enntry
+	// first fit
+	if(desiredBytes<=0){
+		return 0;
+	}
+	int i = 0;
+	while(i<HEAP_SIZE-1){
+		if(heap[i]<0){
+			if(abs(heap[i])*sizeof(int32_t)>=desiredBytes){
+				int old_size = abs(heap[i]);
+				int num_alloc_entries = (desiredBytes+sizeof(int32_t)-1)/sizeof(int32_t);
+				if((old_size-num_alloc_entries-2)<1){
+					// no free space left after allocation
+					// use the entire block
+					heap[i] = old_size;
+					heap[i+old_size+1] = old_size;
+				}else{
+					// split the block
+					heap[i] = num_alloc_entries;
+					heap[i+num_alloc_entries+1] = num_alloc_entries;
+					heap[i+num_alloc_entries+2] = -(old_size-num_alloc_entries-2);
+					heap[i+old_size+1] = -(old_size-num_alloc_entries-2);
+				}
+				return (void *)(&heap[i+1]);
+			}
+		}
+		i = i + abs(heap[i]) + 2;
+	}
   return 0;   // NULL
 }
 
@@ -61,9 +100,13 @@ void* Heap_Malloc(int32_t desiredBytes){
 // output: void* pointing to the allocated memory block or will return NULL
 //   if there isn't sufficient space to satisfy allocation request
 //notes: the allocated memory block will be zeroed out
-void* Heap_Calloc(int32_t desiredBytes){  
- 
-  return 0;   // NULL
+void* Heap_Calloc(int32_t desiredBytes){
+	void* pt = Heap_Malloc(desiredBytes);
+	if(pt==NULL){
+		return 0;
+	}
+	memset(pt, 0, *((int*)pt-1)*sizeof(int32_t));
+  return pt;   // NULL
 }
 
 
@@ -77,7 +120,58 @@ void* Heap_Calloc(int32_t desiredBytes){
 // notes: the given block may be unallocated and its contents
 //   are copied to a new block if growing/shrinking not possible
 void* Heap_Realloc(void* oldBlock, int32_t desiredBytes){
- 
+	int old_size = abs(*((int*)oldBlock-1));
+	int desired_more_block = (desiredBytes+sizeof(int32_t)-1)/sizeof(int32_t) - old_size;
+	if(desired_more_block<=0){
+		return 0; // no need for more spaces
+	}
+	
+	// see if top and bot block statisfy this requirement
+	int32_t* top_self_counter = (int32_t*)oldBlock-1;
+	int32_t* bot_self_counter = (int32_t*)oldBlock + old_size;
+	int32_t* top_merge_counter = NULL;
+	int32_t* bottom_merge_counter = NULL;
+	int free_block = 0;
+	
+	if(top_self_counter-1>=heap && *((int32_t*)oldBlock-2)<0){
+		int top_merge_size = abs(*(top_self_counter-1));
+		free_block += top_merge_size; // merge used entries
+		free_block += 2; // also used size counter for free space
+		top_merge_counter = top_self_counter-1-top_merge_size-1;
+	}
+	
+	if((bot_self_counter+1)<(heap+HEAP_SIZE) && *(bot_self_counter+1)<0){
+		int bot_merge_size = abs(*(bot_self_counter+1));
+		free_block += bot_merge_size;
+		free_block += 2;
+		bottom_merge_counter = bot_self_counter+1+bot_merge_size+1;
+	}
+	
+	// statisfy
+	if(free_block>=desired_more_block){
+		if(top_merge_counter==NULL){
+			top_merge_counter = top_self_counter;
+		}
+		if(bottom_merge_counter==NULL){
+			bottom_merge_counter = bot_self_counter;
+		}
+        // use memmove for may overlap
+		memmove(top_merge_counter+1, oldBlock, old_size*sizeof(int32_t));
+		old_size += free_block;
+		*top_merge_counter = old_size;
+		*bottom_merge_counter = old_size;
+		return top_merge_counter+1;
+	}else{
+		// no then, allocate new space
+		// if no space, return null
+		// else alloc, cpy, free old block
+		void* res_pt = Heap_Malloc(desiredBytes);
+		if(res_pt!=NULL){
+			memcpy((int *)res_pt, oldBlock, old_size*sizeof(int32_t));
+			Heap_Free(oldBlock);
+            return res_pt;
+		}
+	}
   return 0;   // NULL
 }
 
@@ -88,8 +182,38 @@ void* Heap_Realloc(void* oldBlock, int32_t desiredBytes){
 // output: 0 if everything is ok, non-zero in case of error (e.g. invalid pointer
 //     or trying to unallocate memory that has already been unallocated
 int32_t Heap_Free(void* pointer){
- 
-  return 1;   // replace
+	if(pointer==NULL || *((int32_t*)pointer-1)<=0){
+		return 1;
+	}
+	int old_size = abs(*((int32_t*)pointer-1)); // top size counter
+	int32_t* top_self_counter = (int32_t*)pointer-1;
+	int32_t* bot_self_counter = (int32_t*)pointer + old_size;
+	
+	int32_t* top_merge_counter = NULL;
+	int32_t* bottom_merge_counter = NULL;
+    
+	if(top_self_counter-1>=heap && *((int32_t*)pointer-2)<0){
+		int top_merge_size = abs(*(top_self_counter-1));
+		old_size += top_merge_size; // merge used entries
+		old_size += 2; // also used size counter for free space
+		top_merge_counter = top_self_counter-1-top_merge_size-1;
+	}
+	if((bot_self_counter+1)<(heap+HEAP_SIZE) && *(bot_self_counter+1)<0){
+		int bot_merge_size = abs(*(bot_self_counter+1));
+		old_size += bot_merge_size;
+		old_size += 2;
+		bottom_merge_counter = bot_self_counter+1+bot_merge_size+1;
+	}
+	if(top_merge_counter==NULL){
+		top_merge_counter = top_self_counter;
+	}
+	if(bottom_merge_counter==NULL){
+		bottom_merge_counter = bot_self_counter;
+	}
+	*(top_merge_counter) = - old_size;
+	*(bottom_merge_counter) = - old_size;
+	memset(top_merge_counter+1, 0, old_size*sizeof(int32_t));
+    return 0;   // replace
 }
 
 
@@ -98,6 +222,8 @@ int32_t Heap_Free(void* pointer){
 // input: reference to a heap_stats_t that returns the current usage of the heap
 // output: 0 in case of success, non-zeror in case of error (e.g. corrupted heap)
 int32_t Heap_Stats(heap_stats_t *stats){
- 
-  return 1;   // replace
+	(*stats).free = heap_stats.free;
+	(*stats).size = heap_stats.size;
+	(*stats).used = heap_stats.used;
+  return 0;   // replace
 }

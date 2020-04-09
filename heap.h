@@ -14,6 +14,7 @@
 #define HEAP_H
 
 #include <stdint.h>
+#define HEAP_SIZE 500
 
 // struct for holding statistics on the state of the heap
 typedef struct heap_stats {
