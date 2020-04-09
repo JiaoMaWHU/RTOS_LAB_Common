@@ -25,8 +25,8 @@ extern char cmdInput[BYTE_PER_DIR_ENTRY_NAME];
 extern char cmdInput2[128];
 extern int32_t MaxJitter;
 extern uint32_t NumCreated;
-extern uint32_t DataLost;
-extern uint32_t PIDWork;
+//extern uint32_t DataLost;
+//extern uint32_t PIDWork;
 extern uint32_t MaxISRDisableTime;
 extern uint32_t TotalISRDisableTime;
 
@@ -79,11 +79,11 @@ void CreateFileTask(void) {
 	OS_Kill();
 }
 
-void ReadFileTask(void) {
-	eFile_ReadFile(cmdInput);
-	memset(cmdInput, 0, BYTE_PER_DIR_ENTRY_NAME);
-	OS_Kill();
-}
+//void ReadFileTask(void) {
+//	eFile_ReadFile(cmdInput);
+//	memset(cmdInput, 0, BYTE_PER_DIR_ENTRY_NAME);
+//	OS_Kill();
+//}
 
 void WriteFileTask(void) {
 	OS_RedirectToFile(cmdInput);
@@ -116,10 +116,10 @@ void DeleteFileTask(void) {
 	OS_Kill();
 }
 
-void ReadAllFiles(void) {
-  eFile_AllFiles();
-	OS_Kill();
-};
+//void ReadAllFiles(void) {
+//  eFile_AllFiles();
+//	OS_Kill();
+//};
 
 //---------------------Output help instructions---------------------
 // Output help instructions
@@ -138,11 +138,11 @@ void Output_Help(void){
 	UART_OutString("get_systime: output the total and max system runtime during ISR disabled"); OutCRLF(); OutCRLF();
 	UART_OutString("reset_systime: reset the total and max system runtime"); OutCRLF(); OutCRLF();	
 	UART_OutString("create_file, [1]: create a file with given name"); OutCRLF(); OutCRLF();
-	UART_OutString("read_file, [1]: read the content in an given file"); OutCRLF(); OutCRLF();
+//	UART_OutString("read_file, [1]: read the content in an given file"); OutCRLF(); OutCRLF();
 	UART_OutString("write_file, [1], [2]: write to a file with name [1] with content [2]"); OutCRLF(); OutCRLF();
 	UART_OutString("delete_file, [1]: remove a given file"); OutCRLF(); OutCRLF();
 	UART_OutString("format_file : clear all files and data in the disk"); OutCRLF(); OutCRLF();
-	UART_OutString("show_files : print all file names in the directory"); OutCRLF(); OutCRLF();
+//	UART_OutString("show_files : print all file names in the directory"); OutCRLF(); OutCRLF();
 }
 
 //---------------------Call lcd function---------------------
@@ -199,8 +199,8 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 	}else if(!strcmp("get_metrics", cmd[0])){
 		ST7735_Message(0,4,"Timer-jitter= ",MaxJitter);
 		ST7735_Message(0,5,"Number of Threads= ",NumCreated);
-		ST7735_Message(0,6,"DataPointLost= ",DataLost);
-		ST7735_Message(0,7,"PIDWork= ",PIDWork);
+//		ST7735_Message(0,6,"DataPointLost= ",DataLost);
+//		ST7735_Message(0,7,"PIDWork= ",PIDWork);
 	}else if(!strcmp("get_systime", cmd[0])){
 		UART_OutString("Max System Time during ISR disabled is: "); 
 		uint32_t DisplayISRDisable = TotalISRDisableTime / 80000;
@@ -218,11 +218,13 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		memcpy(cmdInput, cmd[1], strlen(cmd[1]));
 		OS_AddThread(&CreateFileTask, 128, 0);
 		OS_Suspend();
-	}else if(!strcmp("read_file", cmd[0])) {
-		memcpy(cmdInput, cmd[1], strlen(cmd[1]));
-		OS_AddThread(&ReadFileTask, 128, 0);
-		OS_Suspend();
-	}else if(!strcmp("write_file", cmd[0])) {
+	}
+//	else if(!strcmp("read_file", cmd[0])) {
+//		memcpy(cmdInput, cmd[1], strlen(cmd[1]));
+//		OS_AddThread(&ReadFileTask, 128, 0);
+//		OS_Suspend();
+//	}
+	else if(!strcmp("write_file", cmd[0])) {
 		memcpy(cmdInput, cmd[1], strlen(cmd[1]));
 		memcpy(cmdInput2, cmd[2], strlen(cmd[2]));
 		OS_AddThread(&WriteFileTask, 128, 0);
@@ -234,10 +236,12 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 	}else if (!strcmp("format_file", cmd[0])) {
 		OS_AddThread(&FormatTask, 128, 0);
 		OS_Suspend();
-	}else if(!strcmp("show_files", cmd[0])) {
-		OS_AddThread(&ReadAllFiles,128,0);
-		OS_Suspend();
-	}else {
+	}
+//	else if(!strcmp("show_files", cmd[0])) {
+//		OS_AddThread(&ReadAllFiles,128,0);
+//		OS_Suspend();
+//	}
+	else {
 		UART_OutString("Invalid command"); OutCRLF();
 	}
 }

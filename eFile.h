@@ -116,7 +116,7 @@ int eFile_Delete(const char name[]);  // remove this file
  * if subdirectories are supported (optional, empty sring for root directory)
  * @return 0 if successful and 1 on failure (e.g., trouble reading from flash)
  */
-int eFile_DOpen(void);
+int eFile_DOpen(const char name[]);
 	
 /**
  * @details Retreive directory entry from open directory
