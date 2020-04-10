@@ -157,9 +157,28 @@ PendSV_Handler; 			   ; 1) Saves R0-R3,R12,LR,PC,PSR
 SVC_Handler
 ; put your Lab 5 code here
 
-
+	LDR R12,[SP,#24] ; Return address -> PC
+	LDRH R12,[R12,#-2] ; SVC instruction is 2 bytes -> number
+	BIC R12,#0xFF00 ; Extract trap number in R12  (AND)
+	LDM SP,{R0-R3} ; Load and Store Multiple registers -> Get any parameters
+	
+	CMP R12,#0
+	BLEQ OS_Id
+	
+	CMP R12,#1
+	BLEQ OS_Kill
+	
+	CMP R12,#2
+	BLEQ OS_Sleep
+	
+	CMP R12,#3
+	BLEQ OS_Time
+	
+	CMP R12,#4
+	BLEQ OS_AddThread
+	
+	STR R0,[SP] ;Store return value
     BX      LR                   ; Return from exception
-
 
 
     ALIGN

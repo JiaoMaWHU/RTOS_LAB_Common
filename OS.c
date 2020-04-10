@@ -283,6 +283,7 @@ void OS_Init(void){
 	UART_Init();
 	ST7735_InitR(INITR_REDTAB); // LCD initialization
 	PLL_Init(Bus80MHz);         // set processor clock to 80 MHz
+	Heap_Init();
 	for (int i = 0; i < TASKSLOT; i++) {
 		fun_ptr_arr[i] = NULL;
 		periodicTasksPeriod[i] = 0;
