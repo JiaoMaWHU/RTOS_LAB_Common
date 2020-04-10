@@ -162,6 +162,8 @@ SVC_Handler
 	BIC R12,#0xFF00 ; Extract trap number in R12  (AND)
 	LDM SP,{R0-R3} ; Load and Store Multiple registers -> Get any parameters
 	
+	PUSH {LR}
+	
 	CMP R12,#0
 	BLEQ OS_Id
 	
@@ -170,15 +172,16 @@ SVC_Handler
 	
 	CMP R12,#2
 	BLEQ OS_Sleep
-	
+
 	CMP R12,#3
 	BLEQ OS_Time
 	
 	CMP R12,#4
 	BLEQ OS_AddThread
+
+	POP {LR}
 	
 	STR R0,[SP] ;Store return value
-	LDR LR,[SP,#20] ; load LR value
     BX      LR      ; Return from exception
 
 
