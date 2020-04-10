@@ -178,7 +178,8 @@ SVC_Handler
 	BLEQ OS_AddThread
 	
 	STR R0,[SP] ;Store return value
-    BX      LR                   ; Return from exception
+	LDR LR,[SP,#20] ; load LR value
+    BX      LR      ; Return from exception
 
 
     ALIGN
