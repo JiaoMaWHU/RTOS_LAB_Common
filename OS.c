@@ -788,9 +788,7 @@ void OS_Kill(void){
 		}
 	}
 	EndCritical(status);
-	ContextSwitch(); // questions here
-  for(;;){};        // can not return
-    
+	ContextSwitch(); // questions here   
 }; 
 
 // ******** OS_Suspend ************
