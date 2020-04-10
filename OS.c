@@ -24,6 +24,7 @@
 #include "../inc/ADCT0ATrigger.h"
 #include "../RTOS_Labs_common/UART0int.h"
 #include "../RTOS_Labs_common/eFile.h"
+#include "../RTOS_Labs_common/heap.h"
 
 // function definitions in osasm.s
 void OS_DisableInterrupts(void); // Disable interrupts
@@ -87,6 +88,9 @@ uint32_t PreISRDisableTime;
 uint32_t MaxISRDisableTime;
 uint32_t TotalISRDisableTime;
 uint32_t timeDiff;
+
+pcbType* addThreadProcessPt = NULL;
+uint32_t globalPid = 0;
 
 void (*UserSW1Task)(void);   // user function
 void (*UserSW2Task)(void);   // user function
@@ -449,7 +453,7 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 		threadID = threadIdMax;
 		if(threadIdMax+1==NUMTHREAD){
 			EndCritical(status);   
-			return 1; // replace this line with solution
+			return 0; // replace this line with solution
 		}
 		threadIdMax++;
 	}
@@ -458,6 +462,24 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 	tcbs[threadID].blockSemaPt = NULL;
 	OS_SetInitialStack(threadID);
 	Stacks[threadID][STACKSIZE-2] = (int32_t)(task); // PC
+	if(addThreadProcessPt!=NULL){
+		// add from AddProcess
+		tcbs[threadID].processPt = addThreadProcessPt;
+		addThreadProcessPt->threadSize++;
+		addThreadProcessPt = NULL;
+	}else{
+		// add from OS or the thread of a process
+		if(RunPt==NULL){ // add before OS_launch
+			tcbs[threadID].processPt = NULL;
+		}else{
+			// add from a thread
+			tcbs[threadID].processPt = RunPt->processPt;
+		}
+	}
+	// set r9
+	if(tcbs[threadID].processPt!=NULL){
+		Stacks[threadID][STACKSIZE-11] = (int)tcbs[threadID].processPt->dataPt;
+	}
 	insertPriorityHelper(&HeadPt, &tcbs[threadID]);
 	threadID++;	// increment thread id for future new threads
   EndCritical(status);   
@@ -505,9 +527,14 @@ int OS_AddParamThread(void(*task)(char *param), char *param, uint32_t stackSize,
 int OS_AddProcess(void(*entry)(void), void *text, void *data, 
   unsigned long stackSize, unsigned long priority){
   // put Lab 5 solution here
-
-     
-  return 0; // replace this line with Lab 5 solution
+	pcbType* newProcess = (pcbType*)Heap_Calloc(sizeof(pcbType));
+	newProcess->dataPt = data;
+	newProcess->textPt = text;
+	newProcess->pid = globalPid++;
+	newProcess->threadSize = 0;
+	addThreadProcessPt = newProcess;
+	// add initial thread
+  return OS_AddThread(entry, stackSize, priority);
 }
 
 //******** OS_Id *************** 
@@ -749,7 +776,16 @@ void OS_Kill(void){
 	NextPt = HeadPt;
 	restoreTcbStackPt++;
 	restoredTcbStack[restoreTcbStackPt] = RunPt->id;
-
+	if(RunPt->processPt!=NULL){
+		// thread belongs to a process
+		RunPt->processPt->threadSize--;
+		if(RunPt->processPt->threadSize==0){
+			// kill the process
+			Heap_Free(RunPt->processPt->textPt);
+			Heap_Free(RunPt->processPt->dataPt);
+			Heap_Free(RunPt->processPt);
+		}
+	}
 	EndCritical(status);
 	ContextSwitch(); // questions here
   for(;;){};        // can not return

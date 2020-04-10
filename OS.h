@@ -42,9 +42,19 @@ struct tcb{
 	uint32_t priority;	 // the priority of the current thread (lab 3)
 	uint32_t state;  // current state of the thread
 	struct Sema4* blockSemaPt;
+	struct pcb* processPt;
 };
 
 typedef struct tcb tcbType; // meaning replace "struct tcb" with tcbType
+
+struct pcb{
+	uint32_t pid;
+	uint32_t threadSize;
+	int32_t* textPt;
+	int32_t* dataPt;
+};
+
+typedef struct pcb pcbType;
 
 /**
  * \brief Semaphore structure. Feel free to change the type of semaphore, there are lots of good solutions
