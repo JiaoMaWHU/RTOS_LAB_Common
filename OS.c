@@ -35,8 +35,7 @@ void ContextSwitch(void);
 // Performance Measurements 
 int32_t MaxJitter = 0;             // largest time jitter between interrupts in usec
 int32_t MaxJitter2 = 0;
-char cmdInput[BYTE_PER_DIR_ENTRY_NAME];
-char cmdInput2[128];
+
 #define JITTERSIZE 64
 #define NUMTHREAD 32
 #define STACKSIZE 128
@@ -46,6 +45,9 @@ char cmdInput2[128];
 #define BLOCK 3
 #define FifoBufferSize 32
 #define TASKSLOT 8
+
+char cmdInput[CMD1SIZE];
+char cmdInput2[CMD2SIZE];
 
 uint32_t OUTPUTMODE;
 
@@ -467,7 +469,7 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 		// add from AddProcess
 		tcbs[threadID].processPt = addThreadProcessPt;
 		addThreadProcessPt->threadSize++;
-		addThreadProcessPt = NULL;
+//		addThreadProcessPt = NULL;
 	}else{
 		// add from OS or the thread of a process
 		if(RunPt==NULL){ // add before OS_launch
@@ -535,7 +537,8 @@ int OS_AddProcess(void(*entry)(void), void *text, void *data,
 	newProcess->threadSize = 0;
 	addThreadProcessPt = newProcess;
 	// add initial thread
-  return OS_AddThread(entry, stackSize, priority);
+	if (OS_AddThread(entry, stackSize, priority) == 1) return 0;
+  return -1;
 }
 
 //******** OS_Id *************** 
@@ -785,6 +788,7 @@ void OS_Kill(void){
 			Heap_Free(RunPt->processPt->textPt);
 			Heap_Free(RunPt->processPt->dataPt);
 			Heap_Free(RunPt->processPt);
+			addThreadProcessPt = NULL;
 		}
 	}
 	EndCritical(status);
