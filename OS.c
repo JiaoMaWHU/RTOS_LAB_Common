@@ -537,8 +537,7 @@ int OS_AddProcess(void(*entry)(void), void *text, void *data,
 	newProcess->threadSize = 0;
 	addThreadProcessPt = newProcess;
 	// add initial thread
-	if (OS_AddThread(entry, stackSize, priority) == 1) return 0;
-  return -1;
+  return OS_AddThread(entry, stackSize, priority);
 }
 
 //******** OS_Id *************** 

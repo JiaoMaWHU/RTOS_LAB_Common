@@ -173,7 +173,7 @@ void RunProgramTask(void) {
 		   OS_Kill();
 	  }
 		
-		if (exec_elf(cmdInput, &env) == 0) {
+		if (exec_elf(cmdInput, &env) == 1) {
 			  UART_OutString("exec elf succeeded"); OutCRLF();
 		} else {
 		    UART_OutString("exec elf failed"); OutCRLF();
