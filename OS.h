@@ -32,6 +32,8 @@
 #define OUTPUT_FILE 1
 #define OUTPUT_LCD  2
 
+#define CMD1SIZE 10
+#define CMD2SIZE 128
 
 struct tcb{
   int32_t *sp;       // pointer to stack (valid for threads not running

@@ -16,19 +16,25 @@
 #include "../RTOS_Labs_common/UART0int.h"
 #include "../RTOS_Labs_common/eDisk.h"
 #include "../RTOS_Labs_common/eFile.h"
+#include "../RTOS_Labs_common/heap.h"
+#include "../RTOS_Lab5_ProcessLoader/loader.h"
 
 #define CMD_BUFFER_SIZE 128
 
 char cmd_buffer[CMD_BUFFER_SIZE];  // global to assist in debugging
 
-extern char cmdInput[BYTE_PER_DIR_ENTRY_NAME];
-extern char cmdInput2[128];
+extern char cmdInput[CMD1SIZE];
+extern char cmdInput2[CMD2SIZE];
 extern int32_t MaxJitter;
 extern uint32_t NumCreated;
 //extern uint32_t DataLost;
 //extern uint32_t PIDWork;
 extern uint32_t MaxISRDisableTime;
 extern uint32_t TotalISRDisableTime;
+
+static const ELFSymbol_t symtab[] = {
+   { "ST7735_Message", ST7735_Message }
+};
 
 //---------------------OutCRLF---------------------
 // Output a CR,LF to UART to go to a new line
@@ -75,22 +81,58 @@ void CreateFileTask(void) {
 	DSTATUS status = eFile_Create(cmdInput);
 	if (status) UART_OutString("Create failed");
 	printf("Create %s succeeded \n\r",cmdInput); 
-	memset(cmdInput, 0, BYTE_PER_DIR_ENTRY_NAME);
+	memset(cmdInput, 0, CMD1SIZE);
 	OS_Kill();
 }
 
-//void ReadFileTask(void) {
-//	eFile_ReadFile(cmdInput);
-//	memset(cmdInput, 0, BYTE_PER_DIR_ENTRY_NAME);
-//	OS_Kill();
-//}
+void ReadFileTask(void) {
+	// open file
+	DSTATUS status =  eFile_Mount();
+	if (status) {
+		UART_OutString("Failed to mount"); 
+		OS_Kill();
+	}
+	
+	status =  eFile_DOpen("");
+	if (status) {
+		UART_OutString("Failed to open dir"); 
+		OS_Kill();
+	}
+	
+	status = eFile_ROpen(cmdInput);
+	if (status) {
+		printf("Error! File not found \n\r");
+		memset(cmdInput, 0, CMD1SIZE);
+    OS_Kill();
+	}
+	
+	char data;
+	while (!eFile_ReadNext(&data)) {
+		UART_OutChar(data);
+	}
+
+	status =  eFile_DClose();
+	if (status) {
+		UART_OutString("Failed to close dir"); 
+		OS_Kill();
+	}
+	
+	status = eFile_Close();
+	if (status) {
+		printf("Failed to close \n\r");
+		memset(cmdInput, 0, CMD1SIZE);
+		OS_Kill();
+	}
+	memset(cmdInput, 0, CMD1SIZE);
+	OS_Kill();
+}
 
 void WriteFileTask(void) {
 	OS_RedirectToFile(cmdInput);
   printf("%s",cmdInput2);
   OS_EndRedirectToFile();
 	printf("Write %s succeeded \n\r",cmdInput); 
-	memset(cmdInput, 0, BYTE_PER_DIR_ENTRY_NAME);
+	memset(cmdInput, 0, CMD1SIZE);
 	OS_Kill();
 }
 
@@ -111,15 +153,93 @@ void DeleteFileTask(void) {
 		UART_OutString("No such file"); 
 	}
 	eFile_Close();
-	memset(cmdInput, 0, BYTE_PER_DIR_ENTRY_NAME);
+	memset(cmdInput, 0, CMD1SIZE);
 	OutCRLF();
 	OS_Kill();
 }
 
-//void ReadAllFiles(void) {
-//  eFile_AllFiles();
-//	OS_Kill();
-//};
+void RunProgramTask(void) {
+	// mount fat and dir
+	  ELFEnv_t env = { symtab, 1 };
+		DSTATUS status = eFile_Mount();
+	  if (status) {
+		   UART_OutString("Failed to mount"); 
+	     OS_Kill();
+	  }
+	
+    status =  eFile_DOpen("");
+	  if (status) {
+		   UART_OutString("Failed to open dir"); 
+		   OS_Kill();
+	  }
+		
+		if (exec_elf(cmdInput, &env) == 0) {
+			  UART_OutString("exec elf succeeded"); OutCRLF();
+		} else {
+		    UART_OutString("exec elf failed"); OutCRLF();
+		}
+		
+		status = eFile_DClose();
+	  if (status) {
+		   UART_OutString("Failed to close dir"); 
+		   OS_Kill();
+	  }
+		status = eFile_Close();
+		
+		if (status) {
+		   UART_OutString("Failed to close file system"); 
+		   OS_Kill();
+	  }
+		OS_Kill();
+}
+
+char const stringA[]="Filename = %s";
+char const stringB[]="File size = %lu bytes";
+char const stringC[]="Number of Files = %u";
+char const stringD[]="Number of Bytes = %lu";
+void ReadAllFiles(void) {
+	DSTATUS status = eFile_Mount();
+	if (status) {
+		UART_OutString("Failed to mount"); 
+		OS_Kill();
+	}
+	
+	status =  eFile_DOpen("");
+	if (status) {
+		UART_OutString("Failed to open dir"); 
+		OS_Kill();
+	}
+	char* name = ""; 
+	unsigned long size;
+	unsigned int num = 0;
+  unsigned long total = 0;
+
+	while(!eFile_DirNext(&name, &size)){
+    printf(stringA, name);
+    printf("  ");
+    printf(stringB, size);
+    printf("\n\r");
+    total = total+size;
+    num++;    
+  }
+  printf(stringC, num);
+  printf("\n\r");
+  printf(stringD, total);
+  printf("\n\r");
+	
+	status =  eFile_DClose();
+	if (status) {
+		UART_OutString("Failed to close dir"); 
+		OS_Kill();
+	}
+	
+  status = eFile_Close();
+	if (status) {
+		UART_OutString("Failed to close"); 
+		OS_Kill();
+	}
+	OS_Kill();
+};
 
 //---------------------Output help instructions---------------------
 // Output help instructions
@@ -138,11 +258,12 @@ void Output_Help(void){
 	UART_OutString("get_systime: output the total and max system runtime during ISR disabled"); OutCRLF(); OutCRLF();
 	UART_OutString("reset_systime: reset the total and max system runtime"); OutCRLF(); OutCRLF();	
 	UART_OutString("create_file, [1]: create a file with given name"); OutCRLF(); OutCRLF();
-//	UART_OutString("read_file, [1]: read the content in an given file"); OutCRLF(); OutCRLF();
+	UART_OutString("read_file, [1]: read the content in an given file"); OutCRLF(); OutCRLF();
 	UART_OutString("write_file, [1], [2]: write to a file with name [1] with content [2]"); OutCRLF(); OutCRLF();
 	UART_OutString("delete_file, [1]: remove a given file"); OutCRLF(); OutCRLF();
 	UART_OutString("format_file : clear all files and data in the disk"); OutCRLF(); OutCRLF();
-//	UART_OutString("show_files : print all file names in the directory"); OutCRLF(); OutCRLF();
+	UART_OutString("show_files : print all file names in the directory"); OutCRLF(); OutCRLF();
+	UART_OutString("run_program, [1]: excute the input program name"); OutCRLF(); OutCRLF();
 }
 
 //---------------------Call lcd function---------------------
@@ -218,13 +339,11 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		memcpy(cmdInput, cmd[1], strlen(cmd[1]));
 		OS_AddThread(&CreateFileTask, 128, 0);
 		OS_Suspend();
-	}
-//	else if(!strcmp("read_file", cmd[0])) {
-//		memcpy(cmdInput, cmd[1], strlen(cmd[1]));
-//		OS_AddThread(&ReadFileTask, 128, 0);
-//		OS_Suspend();
-//	}
-	else if(!strcmp("write_file", cmd[0])) {
+	} else if(!strcmp("read_file", cmd[0])) {
+		memcpy(cmdInput, cmd[1], strlen(cmd[1]));
+		OS_AddThread(&ReadFileTask, 128, 0);
+		OS_Suspend();
+	} else if(!strcmp("write_file", cmd[0])) {
 		memcpy(cmdInput, cmd[1], strlen(cmd[1]));
 		memcpy(cmdInput2, cmd[2], strlen(cmd[2]));
 		OS_AddThread(&WriteFileTask, 128, 0);
@@ -236,11 +355,14 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 	}else if (!strcmp("format_file", cmd[0])) {
 		OS_AddThread(&FormatTask, 128, 0);
 		OS_Suspend();
+	} else if (!strcmp("run_program", cmd[0])) {
+		memcpy(cmdInput, cmd[1], strlen(cmd[1]));
+		OS_AddThread(&RunProgramTask, 128, 0);
+		OS_Suspend();
+	} else if(!strcmp("show_files", cmd[0])) {
+		OS_AddThread(&ReadAllFiles,128,0);
+		OS_Suspend();
 	}
-//	else if(!strcmp("show_files", cmd[0])) {
-//		OS_AddThread(&ReadAllFiles,128,0);
-//		OS_Suspend();
-//	}
 	else {
 		UART_OutString("Invalid command"); OutCRLF();
 	}
