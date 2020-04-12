@@ -469,7 +469,7 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 		// add from AddProcess
 		tcbs[threadID].processPt = addThreadProcessPt;
 		addThreadProcessPt->threadSize++;
-//		addThreadProcessPt = NULL;
+		addThreadProcessPt = NULL;
 	}else{
 		// add from OS or the thread of a process
 		if(RunPt==NULL){ // add before OS_launch
@@ -477,6 +477,7 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 		}else{
 			// add from a thread
 			tcbs[threadID].processPt = RunPt->processPt;
+			RunPt->processPt->threadSize++;
 		}
 	}
 	// set r9

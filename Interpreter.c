@@ -178,7 +178,7 @@ void RunProgramTask(void) {
 		} else {
 		    UART_OutString("exec elf failed"); OutCRLF();
 		}
-		
+
 		status = eFile_DClose();
 	  if (status) {
 		   UART_OutString("Failed to close dir"); 
