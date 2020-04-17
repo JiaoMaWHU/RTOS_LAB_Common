@@ -223,7 +223,7 @@ int eFile_Mount(void){ // initialize file system
 		return 1;
 	}
 	// mount file directory
-	status = eFile_DOpen();
+	status = eFile_DOpen("");
 	status = eDisk_Read(DRIVE_NUM, eFile_fat, 1, (SIZE_FAT_ENTRIES * BYTE_PER_FAT_ENTRY)/512);
 	if(status){
 		return 1;
@@ -577,7 +577,7 @@ int eFile_Delete(const char name[]){  // remove this file
 // Input: directory name is an ASCII string up to seven characters
 //        (empty/NULL for root directory)
 // Output: 0 if successful and 1 on failure (e.g., trouble reading from flash)
-int eFile_DOpen(void){ // open directory
+int eFile_DOpen(const char name[]){ // open directory
 	DSTATUS status = eFile_Init();
 	if(status){
 		return 1;
@@ -721,7 +721,7 @@ int eFile_ReadFile(const char name[]) {
   // open dirctory to load directory from disk
 	char data;
 	
-	DSTATUS status = eFile_DOpen();
+	DSTATUS status = eFile_DOpen("");
 	if (status) {
 		printf("Failed to load dir \n\r");
 		return 1;
@@ -762,7 +762,7 @@ char const stringB[]="File size = %lu bytes";
 char const stringC[]="Number of Files = %u";
 char const stringD[]="Number of Bytes = %lu";
 int eFile_AllFiles(void) {
-  DSTATUS status = eFile_DOpen();
+  DSTATUS status = eFile_DOpen("");
 	if (status) {
 		printf("Failed to load dir \n\r");
 		return 1;
