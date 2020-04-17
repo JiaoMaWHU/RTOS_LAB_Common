@@ -1424,7 +1424,7 @@ void ST7735_Message(uint32_t  d, uint32_t  l, char *pt, int32_t value){
 	memset(value_str, 0, sizeof(value_str));
 	strcat(print_str, pt);
 	strcat(print_str, " ");
-	sprintf(value_str, "%d", value);
+	sprintf(value_str, "%d   ", value);
 	strcat(print_str, value_str);
 	ST7735_DrawString(col, row, print_str, ST7735_WHITE);
 	OS_bSignal(&LCDFree);

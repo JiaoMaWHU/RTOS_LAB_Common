@@ -79,7 +79,8 @@ int32_t Stacks[NUMTHREAD][STACKSIZE];
 uint32_t threadIdMax = 0;
 
 tcbType dummyHeadOfQueue;
-tcbType* headToSleepQueue = &dummyHeadOfQueue; // store the pointer for sleep tcbType
+tcbType* headToSleepQueue = &dummyHeadOfQueue; // store the pointer for sleep tcbType head
+tcbType* tailToSleepQueue = &dummyHeadOfQueue; // store the pointer for sleep tcbType tail
 
 int32_t restoredTcbStack[NUMTHREAD];
 int32_t restoreTcbStackPt = -1;
@@ -235,6 +236,8 @@ void traverseSleepQueue(void){
 			tmpQueueNode->prior->next = tmpQueueNode->next;
 			if(tmpQueueNode->next!=NULL){
 				tmpQueueNode->next->prior = tmpQueueNode->prior;
+			} else {
+			  tailToSleepQueue = tmpQueueNode->prior; // update tail node to the previous
 			}
 			// insert after tailnode
 			insertPriorityHelper(&HeadPt, tmpQueueNode);
@@ -758,12 +761,19 @@ void OS_Sleep(uint32_t sleepTime){
 	NextPt = HeadPt;
 	
 	// insert into queue
-	RunPt->next = headToSleepQueue->next;
-	if(headToSleepQueue->next!=NULL){ // empty queue, the first pt
-		headToSleepQueue->next->prior = RunPt;
-	}
-	headToSleepQueue->next = RunPt;
-	RunPt->prior = headToSleepQueue;
+	tailToSleepQueue->next = RunPt;
+	RunPt->prior = tailToSleepQueue;
+	RunPt->next = NULL;
+	tailToSleepQueue = RunPt; // update tail pointer to new node;
+	
+	
+	
+//	RunPt->next = headToSleepQueue->next;
+//	if(headToSleepQueue->next!=NULL){ // empty queue, the first pt
+//		headToSleepQueue->next->prior = RunPt;
+//	}
+//	headToSleepQueue->next = RunPt;
+//	RunPt->prior = headToSleepQueue;
 	
 	EndCritical(status);
 	ContextSwitch(); // questions here
@@ -788,7 +798,6 @@ void OS_Kill(void){
 			Heap_Free(RunPt->processPt->textPt);
 			Heap_Free(RunPt->processPt->dataPt);
 			Heap_Free(RunPt->processPt);
-			addThreadProcessPt = NULL;
 		}
 	}
 	EndCritical(status);
