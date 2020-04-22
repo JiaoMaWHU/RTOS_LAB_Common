@@ -52,6 +52,7 @@
 #include <stdlib.h>
 #include "../inc/tm4c123gh6pm.h"
 #include "../inc/CortexM.h"
+#include "../RTOS_Labs_common/OS.h"
 #include "../RTOS_Labs_common/FIFO.h"
 #include "../RTOS_Labs_common/UART0int.h"
 #include "../RTOS_Labs_common/esp8266.h"
@@ -105,6 +106,9 @@ AddIndexFifo(ESP8266Tx, FIFOSIZE, char, FIFOSUCCESS, FIFOFAIL)
 uint16_t ESP8266_Server = 0;   // server port, if any   
 uint16_t ESP8266_ConnectionMux = 0;
 uint16_t ESP8266_Segment = 0;  // last segment ID for buffered send
+
+Sema4Type RxData;
+Sema4Type TxData;
 
 /*
 =======================================================================
@@ -311,6 +315,9 @@ void ESP8266_InitUART(int rx_echo, int tx_echo){ volatile int delay;
   ESP8266Rx0Fifo_Init();  
   ESP8266_EchoResponse = rx_echo;
   ESP8266_EchoCommand = tx_echo;
+	
+	OS_InitSemaphore(&RxData, 0);
+	OS_InitSemaphore(&TxData, FIFOSIZE);;
 #if ESP8266_UART==1
   SYSCTL_RCGCUART_R |= 0x02; // Enable UART1
   while((SYSCTL_PRUART_R&0x02)==0){};
@@ -376,11 +383,12 @@ void ESP8266_DisableInterrupt(void){
 void static ESP8266BufferToTx(void){
   char letter;
   while(((UART_ESP8266(_FR_R)&UART_FR_TXFF) == 0) && (ESP8266TxFifo_Size() > 0)){
-    ESP8266TxFifo_Get(&letter);
+		ESP8266TxFifo_Get(&letter);
     if(ESP8266_EchoCommand){
       UART_OutCharNonBlock(letter); // echo
     }
     UART_ESP8266(_DR_R) = letter;
+		OS_Signal(&TxData);
   }
 }
 
@@ -397,7 +405,8 @@ void static ESP8266RxToBuffer(void){
     }
     if(!ReceiveDataFilter(letter)) {
       ESP8266RxFifo_Put(letter);
-    }
+    	OS_Signal(&RxData);
+		}
   }
 }
 
@@ -429,6 +438,7 @@ void UART_ESP8266(_Handler)(void){
 // Inputs: character to transmit
 // Outputs: none
 void ESP8266_OutChar(char data){
+	OS_Wait(&TxData);
   while(ESP8266TxFifo_Put(data) == FIFOFAIL){};
   UART_ESP8266(_IM_R) &= ~UART_IM_TXIM;          // disable TX FIFO interrupt
   ESP8266BufferToTx();
@@ -442,6 +452,7 @@ void ESP8266_OutChar(char data){
 // Inputs: none
 // Outputs: character received
 char ESP8266_InChar(void){ char letter;
+	OS_Wait(&RxData);
   while(ESP8266RxFifo_Get(&letter) == FIFOFAIL){};
   return(letter);
 }
