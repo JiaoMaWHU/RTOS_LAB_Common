@@ -48,6 +48,7 @@ int32_t MaxJitter2 = 0;
 
 char cmdInput[CMD1SIZE];
 char cmdInput2[CMD2SIZE];
+char espBuffer[1024];
 
 uint32_t OUTPUTMODE;
 
@@ -1038,6 +1039,7 @@ int fgetc (FILE *f){
 int OS_RedirectToFile(char *name){
   // mount dir and fat from disk
   if(eFile_Mount()) return 1;
+	if(eFile_DOpen("")) return 1;
 	if(eFile_Create(name)) return 1;
 	if(eFile_WOpen(name)) return 1;
 	OUTPUTMODE = OUTPUT_FILE;

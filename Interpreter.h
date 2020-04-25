@@ -48,3 +48,14 @@ void Call_LCD(char *cmd[]);
 void Interpreter_OutString(char *s);
 
 void Interpreter_InString(char *s, uint16_t max);
+
+//---------------------FileTaskSeries---------------------
+// Output: none
+void FormatTask(void);
+void CreateFileTask(void);
+void ReadFileTask(void);
+void WriteFileTask(void);
+void DeleteFileTask(void);
+void RunProgramTask(void);
+void ReadAllFiles(void);
+
