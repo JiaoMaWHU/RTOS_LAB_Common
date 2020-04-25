@@ -48,6 +48,7 @@ int32_t MaxJitter2 = 0;
 
 char cmdInput[CMD1SIZE];
 char cmdInput2[CMD2SIZE];
+char espBuffer[1024];
 
 uint32_t OUTPUTMODE;
 

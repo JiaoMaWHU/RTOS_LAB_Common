@@ -30,6 +30,7 @@
 
 extern uint32_t NumCreated;
 extern char Response[RSP_BUFFER_SIZE];
+extern char espBuffer[1024];
 
 Sema4Type ServerSema;
 
@@ -50,6 +51,56 @@ char header[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close
 // 4: eFile ..
 // 5: exec_elf ..
 char * (rsp[5]); // an array of 4 char pointers
+
+char const string1[]="Filename = %s";
+char const string2[]="File size = %lu bytes";
+char const string3[]="Number of Files = %u";
+char const string4[]="Number of Bytes = %lu";
+void ESP_ReadAllFiles(void) {
+	DSTATUS status = eFile_Mount();
+	if (status) {
+		ESP8266_Send("Failed to mount"); 
+		OS_Kill();
+	}
+	
+	status =  eFile_DOpen("");
+	if (status) {
+		ESP8266_Send("Failed to open dir"); 
+		OS_Kill();
+	}
+	char* name = ""; 
+	unsigned long size;
+	unsigned int num = 0;
+  unsigned long total = 0;
+
+  memset(espBuffer, 0, 1024*sizeof(char));
+	int length = 0;
+	while(!eFile_DirNext(&name, &size)){
+		length += sprintf(espBuffer+length, string1, name);
+    length += sprintf(espBuffer+length, "  ");
+    length += sprintf(espBuffer+length, string2, size);
+    length += sprintf(espBuffer+length, "\n\r");
+		total = total+size;
+    num++;   
+  }
+  length += sprintf(espBuffer+length, string3, num);
+  length += sprintf(espBuffer+length, "\n\r");
+  length += sprintf(espBuffer+length, string4, total);
+  length += sprintf(espBuffer+length,"\n\r");
+	
+	status =  eFile_DClose();
+	if (status) {
+		ESP8266_Send("Failed to close dir"); 
+		OS_Kill();
+	}
+	
+  status = eFile_Close();
+	if (status) {
+		ESP8266_Send("Failed to close"); 
+		OS_Kill();
+	}
+	OS_Kill();
+};
 
 void Response_Parser(char* buffer) {
 	uint16_t id = 0;
@@ -132,13 +183,18 @@ void ServerRequest(void) {
 		}
 		
 		if(!ESP8266_SendBuffered(header)) printf("Failed/r/n");		
-		if(!ESP8266_SendBuffered(body)) printf("Failed/r/n");
 		if(!ESP8266_SendBufferedStatus()) printf("Failed/r/n"); 	
 		
-	} else {
+	// eFile Series	
+	} else if (strncmp(rsp[0], "4", 1) == 0) { 
+	  OS_AddThread(&ESP_ReadAllFiles, 128, 0);
+		OS_Suspend();
+		ESP8266_Send(espBuffer);	
+  } else {
     ST7735_DrawString(0,3,"Not a valid request",ST7735_YELLOW); 	
 	}
 	
+	for (int i = 0; i < 5; i++) rsp[i] = NULL;
 	ESP8266_CloseTCPConnection();
 	OS_Signal(&ServerSema);
 	OS_Kill();
