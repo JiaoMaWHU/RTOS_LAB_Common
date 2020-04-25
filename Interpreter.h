@@ -43,4 +43,8 @@ void Output_Help(void);
 // Output help instructions
 // Input: cmd arrays
 // Output: none
-void Call_LCD(const char *cmd[]);
+void Call_LCD(char *cmd[]);
+
+void Interpreter_OutString(char *s);
+
+void Interpreter_InString(char *s, uint16_t max);
