@@ -31,6 +31,12 @@
 extern uint32_t NumCreated;
 extern char Response[RSP_BUFFER_SIZE];
 extern char espBuffer[1024];
+extern char cmdInput[CMD1SIZE];
+extern char cmdInput2[CMD2SIZE];
+
+static const ELFSymbol_t symtab[] = {
+   { "ST7735_Message", ST7735_Message }
+};
 
 Sema4Type ServerSema;
 
@@ -57,15 +63,18 @@ char const string2[]="File size = %lu bytes";
 char const string3[]="Number of Files = %u";
 char const string4[]="Number of Bytes = %lu";
 void ESP_ReadAllFiles(void) {
+	int length = 0;
+	memset(espBuffer, 0, 1024*sizeof(char));
 	DSTATUS status = eFile_Mount();
 	if (status) {
-		ESP8266_Send("Failed to mount"); 
+		length += sprintf(espBuffer+length, "Failed to mount");
 		OS_Kill();
 	}
 	
 	status =  eFile_DOpen("");
 	if (status) {
-		ESP8266_Send("Failed to open dir"); 
+		
+		length += sprintf(espBuffer+length, "Failed to open dir"); 
 		OS_Kill();
 	}
 	char* name = ""; 
@@ -73,8 +82,6 @@ void ESP_ReadAllFiles(void) {
 	unsigned int num = 0;
   unsigned long total = 0;
 
-  memset(espBuffer, 0, 1024*sizeof(char));
-	int length = 0;
 	while(!eFile_DirNext(&name, &size)){
 		length += sprintf(espBuffer+length, string1, name);
     length += sprintf(espBuffer+length, "  ");
@@ -90,17 +97,107 @@ void ESP_ReadAllFiles(void) {
 	
 	status =  eFile_DClose();
 	if (status) {
-		ESP8266_Send("Failed to close dir"); 
+		length += sprintf(espBuffer+length, "Failed to close dir"); 
 		OS_Kill();
 	}
 	
   status = eFile_Close();
 	if (status) {
-		ESP8266_Send("Failed to close"); 
+		length += sprintf(espBuffer+length, "Failed to close"); 
 		OS_Kill();
 	}
 	OS_Kill();
 };
+
+void ESP_ReadFileTask(void) {
+	int length = 0;
+	memset(espBuffer, 0, 1024*sizeof(char));
+	// open file
+	DSTATUS status =  eFile_Mount();
+	if (status) {
+		length += sprintf(espBuffer+length, "Failed to mount"); 
+		OS_Kill();
+	}
+	
+	status =  eFile_DOpen("");
+	if (status) {
+		length += sprintf(espBuffer+length,"Failed to open dir"); 
+		OS_Kill();
+	}
+	
+	status = eFile_ROpen(cmdInput);
+	if (status) {
+		length += sprintf(espBuffer+length, "Error! File not found \n\r");
+		memset(cmdInput, 0, CMD1SIZE);
+    OS_Kill();
+	}
+	
+	char data;
+	while (!eFile_ReadNext(&data)) {
+     length += sprintf(espBuffer+length,"%c", data);
+	}
+
+	status =  eFile_DClose();
+	if (status) {
+		length += sprintf(espBuffer+length, "Failed to close dir"); 
+		OS_Kill();
+	}
+	
+	status = eFile_Close();
+	if (status) {
+		length += sprintf(espBuffer+length, "Failed to close \n\r");
+		memset(cmdInput, 0, CMD1SIZE);
+		OS_Kill();
+	}
+	memset(cmdInput, 0, CMD1SIZE);
+	OS_Kill();
+}
+
+void ESP_WriteFileTask(void) {
+	OS_RedirectToFile(cmdInput);
+  printf("%s",cmdInput2);
+  OS_EndRedirectToFile();
+	memset(espBuffer, 0, 1024*sizeof(char));
+	sprintf(espBuffer,"Write %s succeeded \n\r",cmdInput);
+	memset(cmdInput, 0, CMD1SIZE);
+	OS_Kill();
+}
+
+void ESP_RunProgramTask(void) {
+	// mount fat and dir
+	  ELFEnv_t env = { symtab, 1 };
+		DSTATUS status = eFile_Mount();
+		int length = 0;
+	  if (status) {
+		   length += sprintf(espBuffer+length, "Failed to mount"); 
+	     OS_Kill();
+	  }
+	
+    status =  eFile_DOpen("");
+	  if (status) {
+		   length += sprintf(espBuffer+length, "Failed to open dir"); 
+		   OS_Kill();
+	  }
+		
+		if (exec_elf(cmdInput, &env) == 1) {
+			  length += sprintf(espBuffer+length, "exec elf succeeded"); OutCRLF();
+		} else {
+		    length += sprintf(espBuffer+length, "exec elf failed"); OutCRLF();
+		}
+
+		status = eFile_DClose();
+	  if (status) {
+		   length += sprintf(espBuffer+length, "Failed to close dir"); 
+		   OS_Kill();
+	  }
+		status = eFile_Close();
+		
+		if (status) {
+		   length += sprintf(espBuffer+length, "Failed to close file system"); 
+		   OS_Kill();
+	  }
+		OS_Kill();
+}
 
 void Response_Parser(char* buffer) {
 	uint16_t id = 0;
@@ -127,8 +224,7 @@ void ServerRequest(void) {
 	// ADC_in() 
   if(strncmp(rsp[0], "0", 1) == 0) {
     
-		// need to change to ADC_in later. Need to init first
-    sprintf(body, "ADC_value = %d\r\n", 50);
+    sprintf(body, "ADC_value = %d\r\n", ADC_In());
 			
 		if(!ESP8266_SendBuffered(header)) printf("Failed/r/n");		
 		if(!ESP8266_SendBuffered(body)) printf("Failed/r/n");
@@ -185,16 +281,41 @@ void ServerRequest(void) {
 		if(!ESP8266_SendBuffered(header)) printf("Failed/r/n");		
 		if(!ESP8266_SendBufferedStatus()) printf("Failed/r/n"); 	
 		
-	// eFile Series	
+    // eFile_XXX (show dir, read file, write file, create file, delete file)
+		// rsp[1] determines the operation:
+    // a - show dir
+    // b - read file
+    // c - write file
+
 	} else if (strncmp(rsp[0], "4", 1) == 0) { 
-	  OS_AddThread(&ESP_ReadAllFiles, 128, 0);
-		OS_Suspend();
-		ESP8266_Send(espBuffer);	
-  } else {
+		if ((strncmp(rsp[1], "a", 1) == 0)) {
+			OS_AddThread(&ESP_ReadAllFiles, 128, 0);
+			OS_Suspend();
+			ESP8266_Send(espBuffer);		
+		} else if ((strncmp(rsp[1], "b", 1) == 0)) {
+			memcpy(cmdInput, rsp[2], strlen(rsp[2]));
+			OS_AddThread(&ESP_ReadFileTask, 128, 0);
+			OS_Suspend();
+			ESP8266_Send(espBuffer);
+		} else if ((strncmp(rsp[1], "c", 1) == 0)) {
+			memcpy(cmdInput, rsp[2], strlen(rsp[2]));
+		  memcpy(cmdInput2, rsp[3], strlen(rsp[3]));			
+			OS_AddThread(&ESP_WriteFileTask, 128, 0);
+			OS_Suspend();
+			ESP8266_Send(espBuffer);
+		} 
+		// exec_elf()
+	} else if (strncmp(rsp[0], "5", 1) == 0) { 
+	  	memcpy(cmdInput, rsp[1], strlen(rsp[1]));
+		  OS_AddThread(&ESP_RunProgramTask, 128, 0);
+			OS_Suspend(); 
+		  ESP8266_Send(espBuffer);
+	} else {
     ST7735_DrawString(0,3,"Not a valid request",ST7735_YELLOW); 	
 	}
-	
+
 	for (int i = 0; i < 5; i++) rsp[i] = NULL;
+	ESP8266_Send("\n\r");
 	ESP8266_CloseTCPConnection();
 	OS_Signal(&ServerSema);
 	OS_Kill();

@@ -188,4 +188,9 @@ int ESP8266_WaitForConnection(void);
 // output: 1 if success, 0 if fail 
 int ESP8266_DisableServer(void);
 
+//--------ESP8266_OutChar--------
+// prints a character to the esp8226 via uart
+// Inputs: character to transmit
+// Outputs: none
+void ESP8266_OutChar(char data);
 #endif
