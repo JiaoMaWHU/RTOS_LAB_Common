@@ -103,7 +103,7 @@ void ClientInterpreter(void) {
 		memset(cmd_buffer, 0, sizeof(cmd_buffer));
 		if(getout==1){
 			getout = -1;
-			break;
+			return;
 		}
   }
 }

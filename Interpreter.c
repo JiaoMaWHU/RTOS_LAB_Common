@@ -415,7 +415,7 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		}
 	} else if (!strcmp("client_mode", cmd[0])) {
 	  Interpreter_OutString("Enter client mode \r\n");
-		OS_AddThread(&ClientInterpreter, 128, 1);
+		OS_AddThread(&Client, 128, 1);
 		OS_Kill();
 	}
 	else {
