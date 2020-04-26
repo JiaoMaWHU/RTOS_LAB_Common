@@ -68,6 +68,8 @@ void Client_CMD_Parser(char *cmd_buffer_, uint16_t length) {
 	} else if (!strcmp("exec_elf", cmd[0])) {
 		bufferLength = sprintf(fetchBuffer+bufferLength, "5, %s", cmd[1]);	
 	} else if (!strcmp("exit", cmd[0])) {
+		// let server know the section was ended
+		bufferLength = sprintf(fetchBuffer+bufferLength, "9"); 
 		Interpreter_OutString("exit client connection\r\n");
 		getout = 1;
 	} 
