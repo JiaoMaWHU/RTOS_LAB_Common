@@ -39,7 +39,7 @@ static const ELFSymbol_t symtab[] = {
 };
 
 Sema4Type ServerSema;
-
+uint16_t ServerContinue;
 char body[20];
 char header[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n";
 
@@ -210,14 +210,21 @@ void Response_Parser(char* buffer) {
 	}
 }
 
+void ServerRequestWrapper(void) {
+  while (ServerContinue) {
+    ServerRequest();
+	}
+	ESP8266_CloseTCPConnection();
+	OS_Signal(&ServerSema);
+	OS_Kill();
+}
+
 void ServerRequest(void) {
   ST7735_DrawString(0,3,"Connected           ",ST7735_YELLOW); 	
 	// Receive request
   if(!ESP8266_Receive(Response, 64)){
     ST7735_DrawString(0,3,"No request",ST7735_YELLOW); 
-    ESP8266_CloseTCPConnection();
-    OS_Signal(&ServerSema);
-    OS_Kill();
+    ServerContinue = 0;
   }
   Response_Parser(Response);
 	
@@ -310,15 +317,16 @@ void ServerRequest(void) {
 		  OS_AddThread(&ESP_RunProgramTask, 128, 0);
 			OS_Suspend(); 
 		  ESP8266_Send(espBuffer);
-	} else {
+		// disconnect TCP
+	} else if (strncmp(rsp[0], "9", 1) == 0) {
+		ServerContinue = 0;
+		ESP8266_Send("End Server Section");
+  } else {
     ST7735_DrawString(0,3,"Not a valid request",ST7735_YELLOW); 	
 	}
-
+	
+	ESP8266_Send("\r\n");
 	for (int i = 0; i < 5; i++) rsp[i] = NULL;
-	ESP8266_Send("\n\r");
-	ESP8266_CloseTCPConnection();
-	OS_Signal(&ServerSema);
-	OS_Kill();
 }
 
 void Server(void){ 
@@ -343,9 +351,9 @@ void Server(void){
 	// starts the loop for 
   while(1){
     ESP8266_WaitForConnection();
-    
+    ServerContinue = 1;
     // Launch thread with higher priority to serve request
-    if(OS_AddThread(&ServerRequest,128,1)) NumCreated++;
+    if(OS_AddThread(&ServerRequestWrapper,128,1)) NumCreated++;
     
     // The ESP driver only supports one connection, wait for the thread to complete
     OS_Wait(&ServerSema);		
