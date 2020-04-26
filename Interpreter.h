@@ -13,6 +13,9 @@
 
 #include <stdint.h> 
 
+#define CMD_BUFFER_SIZE 128
+#define BUFFER_SIZE 64
+
 /**
  * @details  Run the user interface.
  * @param  none

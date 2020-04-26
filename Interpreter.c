@@ -20,9 +20,7 @@
 #include "../RTOS_Labs_common/Interpreter.h"
 #include "../RTOS_Lab5_ProcessLoader/loader.h"
 #include "../RTOS_Labs_common/esp8266.h"
-
-#define CMD_BUFFER_SIZE 128
-#define BUFFER_SIZE 64
+#include "../RTOS_Labs_common/Client.h"
 
 char cmd_buffer[CMD_BUFFER_SIZE];  // global to assist in debugging
 
@@ -312,6 +310,7 @@ void Output_Help(void){
 	Interpreter_OutString("format_file : clear all files and data in the disk"); OutCRLF(); OutCRLF();
 	Interpreter_OutString("show_files : print all file names in the directory"); OutCRLF(); OutCRLF();
 	Interpreter_OutString("run_program, [1]: excute the input program name"); OutCRLF(); OutCRLF();
+	Interpreter_OutString("client_mode: enter client mode and connects to a server"); OutCRLF(); OutCRLF();
 }
 
 //---------------------Call lcd function---------------------
@@ -414,6 +413,10 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 		if(OS_Id() == TelnetServerID) {
 			getout = 1;
 		}
+	} else if (!strcmp("client_mode", cmd[0])) {
+	  Interpreter_OutString("Enter client mode \r\n");
+		OS_AddThread(&Client, 128, 1);
+		OS_Kill();
 	}
 	else {
 		Interpreter_OutString("Invalid command"); OutCRLF();
@@ -426,6 +429,7 @@ void Interpreter(void){
   //uint32_t n;
 	Interpreter_OutString("Welcome to Interpreter, use 'help'."); OutCRLF();
 	// starts the loop for 
+	getout = -1;
   while(1){
     Interpreter_OutString("> ");
     Interpreter_InString(cmd_buffer, CMD_BUFFER_SIZE-1); 
