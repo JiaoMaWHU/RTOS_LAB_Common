@@ -34,7 +34,6 @@ void Client_Help(void) {
  
 void Client_CMD_Parser(char *cmd_buffer_, uint16_t length) {
 	uint16_t id = 0;
-	int bufferLength = 0;
 	char * (cmd[5]); // an array of 4 char pointers
 	for(uint16_t i = 0; i<5; i++){
 		cmd[i] = NULL;
@@ -49,28 +48,30 @@ void Client_CMD_Parser(char *cmd_buffer_, uint16_t length) {
 	if(!strcmp("help", cmd[0])){
 		Client_Help();
 	} else if(!strcmp("adc_in", cmd[0])){
-		bufferLength = sprintf(fetchBuffer+bufferLength, "0,");
+		sprintf(fetchBuffer, "0,\r\n");
 	} else if (!strcmp("os_time", cmd[0])) {
-		bufferLength = sprintf(fetchBuffer+bufferLength, "1,");
+		sprintf(fetchBuffer, "1,\r\n");
 	} else if (!strcmp("st7735_message", cmd[0])) {
-		bufferLength = sprintf(fetchBuffer+bufferLength, "2, %d, %d, %s, %d,", 
-		                     atoi(cmd[1]), atoi(cmd[2]), cmd[3],atoi(cmd[4]));		
+		sprintf(fetchBuffer, "2, %d, %d, %s, %d,\r\n", 
+		                     atoi(cmd[1]), atoi(cmd[2]), cmd[3], atoi(cmd[4]));		
 	} else if (!strcmp("led_on", cmd[0])) {
-		bufferLength = sprintf(fetchBuffer+bufferLength, "3, %d, 1", atoi(cmd[1]));
+		sprintf(fetchBuffer, "3, %d, 1\r\n", atoi(cmd[1]));
 	} else if (!strcmp("led_off", cmd[0])) {
-		bufferLength = sprintf(fetchBuffer+bufferLength, "3, %d, 0", atoi(cmd[1]));	
+		sprintf(fetchBuffer, "3, %d, 0\r\n", atoi(cmd[1]));	
 	} else if (!strcmp("efile_all", cmd[0])) {
-		bufferLength = sprintf(fetchBuffer+bufferLength, "4,a");	
+		sprintf(fetchBuffer, "4,a\r\n");	
 	} else if (!strcmp("efile_read", cmd[0])) {
-		bufferLength = sprintf(fetchBuffer+bufferLength, "4, b, %s", cmd[1]);	
+		sprintf(fetchBuffer, "4,b,%s,\r\n", cmd[1]);	
 	} else if (!strcmp("efile_write", cmd[0])) {
-		bufferLength = sprintf(fetchBuffer+bufferLength, "4, c, %s, %s", cmd[1], cmd[2]);	
+		sprintf(fetchBuffer, "4,c,%s,%s,\r\n", cmd[1], cmd[2]);	
 	} else if (!strcmp("exec_elf", cmd[0])) {
-		bufferLength = sprintf(fetchBuffer+bufferLength, "5, %s", cmd[1]);	
+		sprintf(fetchBuffer, "5,%s,\r\n", cmd[1]);	
 	} else if (!strcmp("exit", cmd[0])) {
 		Interpreter_OutString("exit client connection\r\n");
 		getout = 1;
-	} 
+	} else {
+		Interpreter_OutString("wrong cmd\r\n");
+	}
 	
 	if (strlen(fetchBuffer) > 0) {
 		// Send request to server
@@ -86,7 +87,7 @@ void Client_CMD_Parser(char *cmd_buffer_, uint16_t length) {
 		} else {
 			// print response
 			Interpreter_OutString(responseBuffer);
-		}	
+		}
 	}
 }
 
@@ -112,10 +113,10 @@ void ClientInterpreterWrapper(void) {
   ST7735_DrawString(0,2,"                 ",ST7735_YELLOW);
   ESP8266_GetStatus();  // debugging
   // Fetch weather from server
-  if(!ESP8266_MakeTCPConnection("api.openweathermap.org", 80, 0)){ // open socket to web server on port 80
+  if(!ESP8266_MakeTCPConnection("192.168.0.135", 2626, 0)){ // open socket to web server on port 80
     ST7735_DrawString(0,2,"Connection failed",ST7735_YELLOW); 
     OS_Kill();
-  }  
+  }
 	ClientInterpreter();
 	ESP8266_CloseTCPConnection();
 	OS_AddThread(&Interpreter, 128, 1);
