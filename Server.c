@@ -34,6 +34,8 @@ extern char espBuffer[1024];
 extern char cmdInput[CMD1SIZE];
 extern char cmdInput2[CMD2SIZE];
 
+uint16_t ledCount;
+
 static const ELFSymbol_t symtab[] = {
    { "ST7735_Message", ST7735_Message }
 };
@@ -41,7 +43,6 @@ static const ELFSymbol_t symtab[] = {
 Sema4Type ServerSema;
 uint16_t ServerContinue;
 char body[20];
-char header[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n";
 
 // rsp[0]: command for the instructions
 // rsp[1]: first argument
@@ -125,6 +126,7 @@ void ESP_ReadFileTask(void) {
 		OS_Kill();
 	}
 	
+	printf("%s",cmdInput);
 	status = eFile_ROpen(cmdInput);
 	if (status) {
 		length += sprintf(espBuffer+length, "Error! File not found \n\r");
@@ -232,20 +234,15 @@ void ServerRequest(void) {
   if(strncmp(rsp[0], "0", 1) == 0) {
     
     sprintf(body, "ADC_value = %d\r\n", ADC_In());
-			
-		if(!ESP8266_SendBuffered(header)) printf("Failed/r/n");		
+				
 		if(!ESP8266_SendBuffered(body)) printf("Failed/r/n");
-		if(!ESP8266_SendBufferedStatus()) printf("Failed/r/n");
 	
 	// OS_Time()
 	} else if (strncmp(rsp[0], "1", 1) == 0) {
 		
-		sprintf(body, "OS_Time = %d\r\n", OS_MsTime());
-		
-		if(!ESP8266_SendBuffered(header)) printf("Failed/r/n");		
-		if(!ESP8266_SendBuffered(body)) printf("Failed/r/n");
-		if(!ESP8266_SendBufferedStatus()) printf("Failed/r/n"); 	
+		sprintf(body, "OS_Time = %d\r\n", OS_MsTime());	
 	
+		if(!ESP8266_SendBuffered(body)) printf("Failed/r/n");
 		// ST7735_Message()
   } else if (strncmp(rsp[0], "2", 1) == 0) {
 		uint32_t d = atoi(rsp[1]);
@@ -253,10 +250,7 @@ void ServerRequest(void) {
 		char *pt = rsp[3];
 		int32_t value = atoi(rsp[4]);
 		
-		ST7735_Message(d,l,pt,value);
-		
-		if(!ESP8266_SendBuffered(header)) printf("Failed/r/n");		
-		if(!ESP8266_SendBufferedStatus()) printf("Failed/r/n"); 	
+		ST7735_Message(d,l,pt,value);	
 	
 	// LED_toggle()
   } else if (strncmp(rsp[0], "3", 1) == 0) {
@@ -283,10 +277,7 @@ void ServerRequest(void) {
 			}	else if (action == 0) {
 			  PF3 &= ~0x08;
 			}	
-		}
-		
-		if(!ESP8266_SendBuffered(header)) printf("Failed/r/n");		
-		if(!ESP8266_SendBufferedStatus()) printf("Failed/r/n"); 	
+		}	
 		
     // eFile_XXX (show dir, read file, write file, create file, delete file)
 		// rsp[1] determines the operation:
@@ -321,7 +312,22 @@ void ServerRequest(void) {
 	} else if (strncmp(rsp[0], "9", 1) == 0) {
 		ServerContinue = 0;
 		ESP8266_Send("End Server Section");
-  } else {
+  } else if (strcmp(rsp[0], "led_switch") == 0) {
+		
+		if (ledCount % 3 == 0) {
+			  PF3 &= ~0x08;
+			  PF1 |= 0x02;		
+		} else if (ledCount % 3 == 1) {
+			  PF1 &= ~0x02;
+				PF2 |= 0x04;
+		} else if (ledCount % 3 == 2) {	
+				PF2 &= ~0x04;			
+				PF3 |= 0x08;
+		}	
+		
+	  ledCount += 1;
+		
+	} else {
     ST7735_DrawString(0,3,"Not a valid request",ST7735_YELLOW); 	
 	}
 	
@@ -343,7 +349,7 @@ void Server(void){
     OS_Kill();
   }
   ST7735_DrawString(0,1,"Wifi connected",ST7735_GREEN);
-  if(!ESP8266_StartServer(80,600)) {  // port 80, 5min timeout
+  if(!ESP8266_StartServer(23,600)) {  // port 80, 5min timeout
     ST7735_DrawString(0,2,"Server failure",ST7735_YELLOW); 
     OS_Kill();
   }  
@@ -352,6 +358,7 @@ void Server(void){
   while(1){
     ESP8266_WaitForConnection();
     ServerContinue = 1;
+		ledCount = 0;
     // Launch thread with higher priority to serve request
     if(OS_AddThread(&ServerRequestWrapper,128,1)) NumCreated++;
     
