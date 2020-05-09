@@ -28,11 +28,14 @@
 
 #include <stdint.h>
 #include "../RTOS_Labs_common/heap.h"
+#include "../RTOS_Labs_common/OS.h"
 #include <string.h>
 #include <stdlib.h> 
 
 heap_stats_t heap_stats;
 static int32_t heap[HEAP_SIZE];
+int32_t* heapP = heap;
+extern group groupArray[];
 
 //******** Heap_Init *************** 
 // Initialize the Heap
@@ -50,6 +53,25 @@ int32_t Heap_Init(void){
 	heap_stats.free = (HEAP_SIZE-2)*sizeof(int32_t);
 	heap_stats.size = (HEAP_SIZE)*sizeof(int32_t);
 	heap_stats.used = 2*sizeof(int32_t);
+  return 0;   // replace
+}
+
+int32_t Heap_group_Init(void){
+	memset(heap, 0, sizeof(heap));
+	// heap 1
+	heap[0] = -(HEAP_SIZE/2-2);
+	heap[HEAP_SIZE/2-1] = -(HEAP_SIZE/2-2);
+	groupArray[1].heapAddress = heap;
+	
+	// heap 2
+	heap[HEAP_SIZE/2] = -(HEAP_SIZE/2-2);
+	heap[HEAP_SIZE-1] = -(HEAP_SIZE/2-2);
+	groupArray[2].heapAddress = heap + HEAP_SIZE/2;
+	
+	// init heap_stats
+	heap_stats.free = (HEAP_SIZE-4)*sizeof(int32_t);
+	heap_stats.size = (HEAP_SIZE)*sizeof(int32_t);
+	heap_stats.used = 4*sizeof(int32_t);
   return 0;   // replace
 }
 
@@ -100,6 +122,47 @@ void* Heap_Malloc(int32_t desiredBytes){
   return 0;   // NULL
 }
 
+void* Heap_Group_Malloc(int32_t desiredBytes, uint16_t groupid){
+	// search from the first enntry
+	// first fit
+	int32_t* gHeap = groupArray[groupid].heapAddress;
+	if(desiredBytes<=0){
+		return 0;
+	}
+	int i = 0;
+	while(i<HEAP_SIZE/2-1){
+		if(gHeap[i]<0){
+			if(abs(gHeap[i])*sizeof(int32_t)>=desiredBytes){
+				int old_size = abs(gHeap[i]);
+				int num_alloc_entries = (desiredBytes+sizeof(int32_t)-1)/sizeof(int32_t);
+				if((old_size-num_alloc_entries-2)<1){
+					// no free space left after allocation
+					// use the entire block
+					gHeap[i] = old_size;
+					gHeap[i+old_size+1] = old_size;
+					
+					// change stats
+					heap_stats.free -= old_size*sizeof(int32_t);
+					heap_stats.used += old_size*sizeof(int32_t);
+				}else{
+					// split the block
+					gHeap[i] = num_alloc_entries;
+					gHeap[i+num_alloc_entries+1] = num_alloc_entries;
+					gHeap[i+num_alloc_entries+2] = -(old_size-num_alloc_entries-2);
+					gHeap[i+old_size+1] = -(old_size-num_alloc_entries-2);
+					
+					// change stats
+					heap_stats.free -= (num_alloc_entries+2)*sizeof(int32_t);
+					heap_stats.used += (num_alloc_entries+2)*sizeof(int32_t);
+				}
+				return (void *)(&gHeap[i+1]);
+			}
+		}
+		i = i + abs(gHeap[i]) + 2;
+	}
+  return 0;   // NULL
+}
+
 
 //******** Heap_Calloc *************** 
 // Allocate memory, data are initialized to 0
@@ -110,6 +173,15 @@ void* Heap_Malloc(int32_t desiredBytes){
 //notes: the allocated memory block will be zeroed out
 void* Heap_Calloc(int32_t desiredBytes){
 	void* pt = Heap_Malloc(desiredBytes);
+	if(pt==NULL){
+		return 0;
+	}
+	memset(pt, 0, *((int*)pt-1)*sizeof(int32_t));
+  return pt;   // NULL
+}
+
+void* Heap_Group_Calloc(int32_t desiredBytes, uint16_t groupid){
+	void* pt = Heap_Group_Malloc(desiredBytes, groupid);
 	if(pt==NULL){
 		return 0;
 	}
@@ -218,6 +290,49 @@ int32_t Heap_Free(void* pointer){
 		heap_stats.used -= (2)*sizeof(int32_t);
 	}
 	if((bot_self_counter+1)<(heap+HEAP_SIZE) && *(bot_self_counter+1)<0){
+		int bot_merge_size = abs(*(bot_self_counter+1));
+		old_size += bot_merge_size;
+		old_size += 2;
+		bottom_merge_counter = bot_self_counter+1+bot_merge_size+1;
+		heap_stats.free += (2)*sizeof(int32_t);
+		heap_stats.used -= (2)*sizeof(int32_t);
+	}
+	if(top_merge_counter==NULL){
+		top_merge_counter = top_self_counter;
+	}
+	if(bottom_merge_counter==NULL){
+		bottom_merge_counter = bot_self_counter;
+	}
+	*(top_merge_counter) = - old_size;
+	*(bottom_merge_counter) = - old_size;
+	memset(top_merge_counter+1, 0, old_size*sizeof(int32_t));
+  return 0;   // replace
+}
+
+int32_t Heap_Group_Free(void* pointer, uint16_t groupid){
+	int32_t* gHeap = groupArray[groupid].heapAddress;
+	if(pointer==NULL || *((int32_t*)pointer-1)<=0){
+		return 1;
+	}
+	int old_size = abs(*((int32_t*)pointer-1)); // top size counter
+	int32_t* top_self_counter = (int32_t*)pointer-1;
+	int32_t* bot_self_counter = (int32_t*)pointer + old_size;
+	
+	int32_t* top_merge_counter = NULL;
+	int32_t* bottom_merge_counter = NULL;
+  
+	heap_stats.free += (old_size)*sizeof(int32_t);
+	heap_stats.used -= (old_size)*sizeof(int32_t);
+	
+	if(top_self_counter-1>=gHeap && *((int32_t*)pointer-2)<0){
+		int top_merge_size = abs(*(top_self_counter-1));
+		old_size += top_merge_size; // merge used entries
+		old_size += 2; // also used size counter for free space
+		top_merge_counter = top_self_counter-1-top_merge_size-1;
+		heap_stats.free += (2)*sizeof(int32_t);
+		heap_stats.used -= (2)*sizeof(int32_t);
+	}
+	if((bot_self_counter+1)<(gHeap+HEAP_SIZE) && *(bot_self_counter+1)<0){
 		int bot_merge_size = abs(*(bot_self_counter+1));
 		old_size += bot_merge_size;
 		old_size += 2;

@@ -45,9 +45,18 @@ struct tcb{
 	uint32_t state;  // current state of the thread
 	struct Sema4* blockSemaPt;
 	struct pcb* processPt;
+	struct groupStruct* groupPt;
+};
+
+struct groupStruct{
+	uint16_t id;
+	int32_t start;
+	int32_t end;
+	int32_t* heapAddress;
 };
 
 typedef struct tcb tcbType; // meaning replace "struct tcb" with tcbType
+typedef struct groupStruct group;
 
 struct pcb{
 	uint32_t pid;
@@ -125,6 +134,19 @@ void OS_SetInitialStack(int i);
 // Outputs: none
 // move RunPtr to the next thread
 void OS_RunPtrScheduler(void);
+
+//******** OS_AddProcess *************** 
+// add a process with foregound thread to the scheduler
+// Inputs: pointer to a void/void entry point
+//         pointer to process text (code) segment
+//         pointer to process data segment
+//         number of bytes allocated for its stack
+//         priority (0 is highest)
+// Outputs: 1 if successful, 0 if this process can not be added
+// This function will be needed for Lab 5
+// In Labs 2-4, this function can be ignored
+int OS_AddProcess(void(*entry)(void), void *text, void *data, 
+  unsigned long stackSize, unsigned long priority, uint16_t groupId);
 
 //******** OS_AddThread *************** 
 // add a foregound thread to the scheduler

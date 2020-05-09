@@ -14,7 +14,7 @@
 #define HEAP_H
 
 #include <stdint.h>
-#define HEAP_SIZE 1000
+#define HEAP_SIZE 2000
 
 // struct for holding statistics on the state of the heap
 typedef struct heap_stats {
@@ -33,6 +33,7 @@ typedef struct heap_stats {
  */
 int32_t Heap_Init(void);
 
+int32_t Heap_group_Init(void);
 
 /**
  * @details Allocate memory, data not initialized
@@ -43,6 +44,8 @@ int32_t Heap_Init(void);
  */
 void* Heap_Malloc(int32_t desiredBytes);
 
+void* Heap_Group_Malloc(int32_t desiredBytes, uint16_t groupid);
+
 
 /**
  * @details Allocate memory, allocated memory is initialized to 0 (zeroed out)
@@ -52,6 +55,8 @@ void* Heap_Malloc(int32_t desiredBytes);
  * @brief Zero-allocate memory
  */
 void* Heap_Calloc(int32_t desiredBytes);
+
+void* Heap_Group_Calloc(int32_t desiredBytes, uint16_t groupid);
 
 
 /**
@@ -74,6 +79,8 @@ void* Heap_Realloc(void* oldBlock, int32_t desiredBytes);
  * @brief  Free memory
  */
 int32_t Heap_Free(void* pointer);
+
+int32_t Heap_Group_Free(void* pointer, uint16_t groupid);
 
 
 /**

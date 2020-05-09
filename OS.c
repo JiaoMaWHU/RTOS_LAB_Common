@@ -103,6 +103,10 @@ uint32_t timeDiff;
 pcbType* addThreadProcessPt = NULL;
 uint32_t globalPid = 0;
 
+extern int32_t* heapP;
+group groupArray[3]; 
+uint16_t addProcessGroupId = 0;
+
 void (*UserSW1Task)(void);   // user function
 void (*UserSW2Task)(void);   // user function
 
@@ -303,7 +307,7 @@ void OS_Init(void){
 	UART_Init();
 	ST7735_InitR(INITR_REDTAB); // LCD initialization
 	PLL_Init(Bus80MHz);         // set processor clock to 80 MHz
-	Heap_Init();
+	Heap_group_Init();
 	for (int i = 0; i < TASKSLOT; i++) {
 		fun_ptr_arr[i] = NULL;
 		periodicTasksPeriod[i] = 0;
@@ -324,6 +328,15 @@ void OS_Init(void){
 //	MPURegionEnable(0);
 	MPUEnable(MPU_CONFIG_PRIV_DEFAULT);
 	MPUIntRegister(&mpuFaultHandler);
+	
+	// set group 
+	groupArray[0].id = 0;
+	groupArray[1].id = 1;
+	groupArray[2].id = 2;
+	groupArray[1].start = (int32_t)heapP;
+	groupArray[1].end = groupArray[1].start + 512/4;
+	groupArray[2].start = (int32_t)heapP + HEAP_SIZE/2;
+	groupArray[2].end = groupArray[2].start + 512/4;
 }; 
 
 
@@ -480,6 +493,14 @@ void OS_MPUConfigure(uint32_t threadId, uint32_t stackAddr) {
 	MPUEnable(MPU_CONFIG_PRIV_DEFAULT);
 }
 
+
+// a wrapping function for os_addthread
+int OS_AddGroupThread(void(*task)(void), uint32_t stackSize, 
+					uint32_t priority, uint16_t groupId){
+	addProcessGroupId = groupId;
+	return OS_AddThread(task, stackSize, priority);
+}
+
 //******** OS_AddThread *************** 
 // add a foregound thread to the scheduler
 // Inputs: pointer to a void/void foreground task
@@ -509,6 +530,8 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 	tcbs[threadID].id = threadID;			  // set the id field of the node
 	tcbs[threadID].priority = priority;  // set the priority field of the node
 	tcbs[threadID].blockSemaPt = NULL;
+	tcbs[threadID].groupPt = &groupArray[addProcessGroupId];
+	addProcessGroupId = 0;
 	OS_SetInitialStack(threadID);
 	Stacks[threadID][STACKSIZE-2] = (int32_t)(task); // PC
 	if(addThreadProcessPt!=NULL){
@@ -579,16 +602,16 @@ int OS_AddParamThread(void(*task)(char *param), char *param, uint32_t stackSize,
 // This function will be needed for Lab 5
 // In Labs 2-4, this function can be ignored
 int OS_AddProcess(void(*entry)(void), void *text, void *data, 
-  unsigned long stackSize, unsigned long priority){
+  unsigned long stackSize, unsigned long priority, uint16_t groupId){
   // put Lab 5 solution here
-	pcbType* newProcess = (pcbType*)Heap_Calloc(sizeof(pcbType));
+	pcbType* newProcess = (pcbType*)Heap_Group_Calloc(sizeof(pcbType), groupId);
 	newProcess->dataPt = data;
 	newProcess->textPt = text;
 	newProcess->pid = globalPid++;
 	newProcess->threadSize = 0;
 	addThreadProcessPt = newProcess;
 	// add initial thread
-  return OS_AddThread(entry, stackSize, priority);
+  return OS_AddGroupThread(entry, stackSize, priority, groupId);
 }
 
 //******** OS_Id *************** 
@@ -842,9 +865,9 @@ void OS_Kill(void){
 		RunPt->processPt->threadSize--;
 		if(RunPt->processPt->threadSize==0){
 			// kill the process
-			Heap_Free(RunPt->processPt->textPt);
-			Heap_Free(RunPt->processPt->dataPt);
-			Heap_Free(RunPt->processPt);
+			Heap_Group_Free(RunPt->processPt->textPt, RunPt->groupPt->id);
+			Heap_Group_Free(RunPt->processPt->dataPt, RunPt->groupPt->id);
+			Heap_Group_Free(RunPt->processPt, RunPt->groupPt->id);
 		}
 	}
 	EndCritical(status);
