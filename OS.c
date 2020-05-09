@@ -25,6 +25,7 @@
 #include "../RTOS_Labs_common/UART0int.h"
 #include "../RTOS_Labs_common/eFile.h"
 #include "../RTOS_Labs_common/heap.h"
+#include "../driverlib/mpu.h"
 
 // function definitions in osasm.s
 void OS_DisableInterrupts(void); // Disable interrupts
@@ -46,9 +47,14 @@ int32_t MaxJitter2 = 0;
 #define FifoBufferSize 32
 #define TASKSLOT 8
 
+int32_t Stacks[NUMTHREAD][STACKSIZE];
+uint32_t threadIdMax = 0;
+
 char cmdInput[CMD1SIZE];
 char cmdInput2[CMD2SIZE];
 char espBuffer[1024];
+
+
 
 uint32_t OUTPUTMODE;
 
@@ -76,8 +82,9 @@ tcbType *RunPt = NULL;
 tcbType *TailPt = NULL;
 tcbType *NextPt = NULL;
 
-int32_t Stacks[NUMTHREAD][STACKSIZE];
-uint32_t threadIdMax = 0;
+// mpu region configurations for each threads
+uint32_t mpuRegionAddr[NUMTHREAD][4];
+uint32_t mpuRegionAttr[NUMTHREAD][4];
 
 tcbType dummyHeadOfQueue;
 tcbType* headToSleepQueue = &dummyHeadOfQueue; // store the pointer for sleep tcbType head
@@ -283,6 +290,13 @@ void SysTick_Init(unsigned long period){ // not set, specified in testmain1.... 
  * @return none
  * @brief  Initialize OS
  */
+
+void mpuFaultHandler(void) {
+  ST7735_DrawString(0,3,"Unauthorize access", ST7735_YELLOW);
+	OS_Kill();
+	MPUIntUnregister();
+}
+
 void OS_Init(void){
   // put Lab 2 (and beyond) solution here
 	DisableInterrupts();
@@ -302,6 +316,14 @@ void OS_Init(void){
 	MaxISRDisableTime = 0;
 	TotalISRDisableTime = 0;
 	OUTPUTMODE = OUTPUT_UART;
+//	MPURegionSet(0, (uint32_t) &Stacks[0],
+//							MPU_RGN_SIZE_32B |
+//							MPU_RGN_PERM_NOEXEC |
+//							MPU_RGN_PERM_PRV_NO_USR_NO |
+//	            MPU_RGN_ENABLE);
+//	MPURegionEnable(0);
+	MPUEnable(MPU_CONFIG_PRIV_DEFAULT);
+	MPUIntRegister(&mpuFaultHandler);
 }; 
 
 
@@ -433,9 +455,29 @@ void OS_RunPtrScheduler(void){
 	}else if(RunPt->state==RUN){
 		RunPt->state=ACTIVE;
 	}
+	// disable the restritions on stack
+	MPURegionDisable(0);
 	// if sleep, just sleep state
 	RunPt = NextPt;
+	// reconfigure mpu for the current process thread
+	if (RunPt -> processPt != NULL) {
+		uint32_t threadID = RunPt -> id;
+	  MPURegionSet(threadID, mpuRegionAddr[threadID][0], mpuRegionAttr[threadID][0]);	
+		MPURegionEnable(0);
+		MPUEnable(MPU_CONFIG_PRIV_DEFAULT);
+	}
+	
 	RunPt->state = RUN;
+}
+
+void OS_MPUConfigure(uint32_t threadId, uint32_t stackAddr) {
+  MPURegionSet(0,stackAddr, 
+	              MPU_RGN_SIZE_512B |
+	              MPU_RGN_PERM_PRV_RW_USR_RW |
+	              MPU_RGN_PERM_NOEXEC |
+	              MPU_RGN_ENABLE); 
+  MPURegionGet(0, &mpuRegionAddr[threadId][0], &mpuRegionAttr[threadId][0]);
+	MPUEnable(MPU_CONFIG_PRIV_DEFAULT);
 }
 
 //******** OS_AddThread *************** 
@@ -473,6 +515,7 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 		// add from AddProcess
 		tcbs[threadID].processPt = addThreadProcessPt;
 		addThreadProcessPt->threadSize++;
+		OS_MPUConfigure(threadID, (uint32_t) &Stacks[threadID]);
 		addThreadProcessPt = NULL;
 	}else{
 		// add from OS or the thread of a process
@@ -482,6 +525,7 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 			// add from a thread
 			tcbs[threadID].processPt = RunPt->processPt;
 			RunPt->processPt->threadSize++;
+			OS_MPUConfigure(threadID, (uint32_t) &Stacks[threadID]);
 		}
 	}
 	// set r9
@@ -490,6 +534,7 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 	}
 	insertPriorityHelper(&HeadPt, &tcbs[threadID]);
 	threadID++;	// increment thread id for future new threads
+	
   EndCritical(status);   
   return 1; // replace this line with solution
 };
@@ -522,6 +567,7 @@ int OS_AddParamThread(void(*task)(char *param), char *param, uint32_t stackSize,
   EndCritical(status);   
   return 1; // replace this line with solution
 };
+
 //******** OS_AddProcess *************** 
 // add a process with foregound thread to the scheduler
 // Inputs: pointer to a void/void entry point
