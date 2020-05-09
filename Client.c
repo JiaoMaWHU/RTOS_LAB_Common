@@ -34,6 +34,7 @@ void Client_Help(void) {
  
 void Client_CMD_Parser(char *cmd_buffer_, uint16_t length) {
 	uint16_t id = 0;
+	int bufferLength = 0;
 	char * (cmd[5]); // an array of 4 char pointers
 	for(uint16_t i = 0; i<5; i++){
 		cmd[i] = NULL;
