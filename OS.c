@@ -38,7 +38,7 @@ int32_t MaxJitter = 0;             // largest time jitter between interrupts in 
 int32_t MaxJitter2 = 0;
 
 #define JITTERSIZE 64
-#define NUMTHREAD 32
+#define NUMTHREAD 16
 #define STACKSIZE 128
 #define RUN 0
 #define ACTIVE 1
