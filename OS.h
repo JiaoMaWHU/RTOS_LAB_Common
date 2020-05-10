@@ -51,7 +51,7 @@ struct tcb{
 struct groupStruct{
 	uint16_t id;
 	int32_t start;
-	int32_t end;
+	int32_t range;
 	int32_t* heapAddress;
 };
 
@@ -363,6 +363,8 @@ uint32_t OS_MsTime(void);
 // It is ok to limit the range of theTimeSlice to match the 24-bit SysTick
 void OS_Launch(uint32_t theTimeSlice);
 
+
+void OS_MPUConfigure(uint32_t region, uint32_t groupId, uint32_t addr, uint16_t flag);
 /**
  * @details open the file for writing, redirect stream I/O (printf) to this file
  * @note if the file exists it will append to the end<br>

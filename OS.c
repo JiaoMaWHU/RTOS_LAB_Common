@@ -26,6 +26,8 @@
 #include "../RTOS_Labs_common/eFile.h"
 #include "../RTOS_Labs_common/heap.h"
 #include "../driverlib/mpu.h"
+#include "../driverlib/interrupt.h"
+#include "../inc/hw_ints.h"
 
 // function definitions in osasm.s
 void OS_DisableInterrupts(void); // Disable interrupts
@@ -53,6 +55,7 @@ uint32_t threadIdMax = 0;
 char cmdInput[CMD1SIZE];
 char cmdInput2[CMD2SIZE];
 char espBuffer[1024];
+extern bool mpuEnable;
 
 
 
@@ -320,12 +323,7 @@ void OS_Init(void){
 	MaxISRDisableTime = 0;
 	TotalISRDisableTime = 0;
 	OUTPUTMODE = OUTPUT_UART;
-//	MPURegionSet(0, (uint32_t) &Stacks[0],
-//							MPU_RGN_SIZE_32B |
-//							MPU_RGN_PERM_NOEXEC |
-//							MPU_RGN_PERM_PRV_NO_USR_NO |
-//	            MPU_RGN_ENABLE);
-//	MPURegionEnable(0);
+	IntEnable(FAULT_MPU);
 	MPUEnable(MPU_CONFIG_PRIV_DEFAULT);
 	MPUIntRegister(&mpuFaultHandler);
 	
@@ -334,9 +332,9 @@ void OS_Init(void){
 	groupArray[1].id = 1;
 	groupArray[2].id = 2;
 	groupArray[1].start = (int32_t)heapP;
-	groupArray[1].end = groupArray[1].start + 512/4;
-	groupArray[2].start = (int32_t)heapP + HEAP_SIZE/2;
-	groupArray[2].end = groupArray[2].start + 512/4;
+	groupArray[1].range = 512;
+	groupArray[2].start = (int32_t)(heapP + HEAP_SIZE/2);
+	groupArray[2].range = 512;
 }; 
 
 
@@ -468,29 +466,58 @@ void OS_RunPtrScheduler(void){
 	}else if(RunPt->state==RUN){
 		RunPt->state=ACTIVE;
 	}
-	// disable the restritions on stack
-	MPURegionDisable(0);
+	
+	if (mpuEnable) {
+		if (RunPt->groupPt->id != NextPt->groupPt->id) {
+			// disable the restritions on stack
+			MPURegionDisable(0);
+			MPURegionDisable(1);
+			MPURegionDisable(2);
+			MPURegionDisable(3);
+			if (RunPt->groupPt->id == 0) {
+				if (NextPt->groupPt->id == 1) {
+					OS_MPUConfigure(0, groupArray[2].id, groupArray[2].start, 0);
+					OS_MPUConfigure(1, groupArray[2].id, groupArray[2].start + 512/4, 0);			  
+				} else if (NextPt->groupPt->id == 2) {
+					OS_MPUConfigure(0, groupArray[1].id, groupArray[1].start, 0);
+					OS_MPUConfigure(1, groupArray[1].id, groupArray[1].start + 512/4, 0);					  
+				}					
+			}		
+			if (RunPt->groupPt->id != 0) {
+				OS_MPUConfigure(0, RunPt->groupPt->id, RunPt->groupPt->start, 0);
+				OS_MPUConfigure(1, RunPt->groupPt->id, RunPt->groupPt->start + 512/4, 0);				
+			}			
+			if (NextPt->groupPt->id != 0) {			
+				OS_MPUConfigure(2, NextPt->groupPt->id, NextPt->groupPt->start, 1);
+				OS_MPUConfigure(3, NextPt->groupPt->id, NextPt->groupPt->start + 512/4, 1);		
+			}
+			if (NextPt->groupPt->id == 0) {
+				MPURegionDisable(0);
+				MPURegionDisable(1);
+				MPURegionDisable(2);
+				MPURegionDisable(3);		
+			}
+			for (int i = 0; i < 4; i++) {
+				MPURegionGet(i, &mpuRegionAddr[0][i], &mpuRegionAttr[0][i]);
+			}
+			MPURegionGet(0, &mpuRegionAddr[0][0], &mpuRegionAttr[0][0]);		
+		}	
+	}
+
 	// if sleep, just sleep state
 	RunPt = NextPt;
 	// reconfigure mpu for the current process thread
-	if (RunPt -> processPt != NULL) {
-		uint32_t threadID = RunPt -> id;
-	  MPURegionSet(threadID, mpuRegionAddr[threadID][0], mpuRegionAttr[threadID][0]);	
-		MPURegionEnable(0);
-		MPUEnable(MPU_CONFIG_PRIV_DEFAULT);
-	}
 	
 	RunPt->state = RUN;
 }
 
-void OS_MPUConfigure(uint32_t threadId, uint32_t stackAddr) {
-  MPURegionSet(0,stackAddr, 
+void OS_MPUConfigure(uint32_t region, uint32_t groupId, uint32_t addr, uint16_t flag) {
+  uint32_t regionPermission = flag == 1 ? MPU_RGN_PERM_PRV_RW_USR_RW : MPU_RGN_PERM_PRV_NO_USR_NO;
+	MPURegionSet(region,addr >> 4 << 4, 
 	              MPU_RGN_SIZE_512B |
-	              MPU_RGN_PERM_PRV_RW_USR_RW |
+	              regionPermission |
 	              MPU_RGN_PERM_NOEXEC |
 	              MPU_RGN_ENABLE); 
-  MPURegionGet(0, &mpuRegionAddr[threadId][0], &mpuRegionAttr[threadId][0]);
-	MPUEnable(MPU_CONFIG_PRIV_DEFAULT);
 }
 
 
@@ -538,7 +565,6 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 		// add from AddProcess
 		tcbs[threadID].processPt = addThreadProcessPt;
 		addThreadProcessPt->threadSize++;
-		OS_MPUConfigure(threadID, (uint32_t) &Stacks[threadID]);
 		addThreadProcessPt = NULL;
 	}else{
 		// add from OS or the thread of a process
@@ -548,7 +574,6 @@ int OS_AddThread(void(*task)(void), uint32_t stackSize,
 			// add from a thread
 			tcbs[threadID].processPt = RunPt->processPt;
 			RunPt->processPt->threadSize++;
-			OS_MPUConfigure(threadID, (uint32_t) &Stacks[threadID]);
 		}
 	}
 	// set r9

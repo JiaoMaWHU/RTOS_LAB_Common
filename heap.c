@@ -32,8 +32,8 @@
 #include <string.h>
 #include <stdlib.h> 
 
-heap_stats_t heap_stats;
 static int32_t heap[HEAP_SIZE];
+heap_stats_t heap_stats;
 int32_t* heapP = heap;
 extern group groupArray[];
 
@@ -59,8 +59,8 @@ int32_t Heap_Init(void){
 int32_t Heap_group_Init(void){
 	memset(heap, 0, sizeof(heap));
 	// heap 1
-	heap[0] = -(HEAP_SIZE/2-2);
-	heap[HEAP_SIZE/2-1] = -(HEAP_SIZE/2-2);
+	heap[0] = -(HEAP_SIZE/2-64-2);
+	heap[HEAP_SIZE/2-64-1] = -(HEAP_SIZE/2-64-2);
 	groupArray[1].heapAddress = heap;
 	
 	// heap 2
