@@ -63,8 +63,8 @@ int32_t Heap_group_Init(void){
 	heap[HEAP_SIZE/2-64-1] = -(HEAP_SIZE/2-64-2);
 	
 	// heap 2
-	heap[HEAP_SIZE/2] = -(HEAP_SIZE/2-2);
-	heap[HEAP_SIZE-1] = -(HEAP_SIZE/2-2);
+	heap[HEAP_SIZE/2] = -(HEAP_SIZE/2-2-64);
+	heap[HEAP_SIZE-1-64] = -(HEAP_SIZE/2-2-64);
 	
 	// init heap_stats
 	heap_stats.free = (HEAP_SIZE-4)*sizeof(int32_t);
@@ -128,7 +128,7 @@ void* Heap_Group_Malloc(int32_t desiredBytes, uint16_t groupid){
 		return 0;
 	}
 	int i = 0;
-	while(i<HEAP_SIZE/2-1){
+	while(i<HEAP_SIZE/2-64-1){
 		if(gHeap[i]<0){
 			if(abs(gHeap[i])*sizeof(int32_t)>=desiredBytes){
 				int old_size = abs(gHeap[i]);
@@ -330,7 +330,7 @@ int32_t Heap_Group_Free(void* pointer, uint16_t groupid){
 		heap_stats.free += (2)*sizeof(int32_t);
 		heap_stats.used -= (2)*sizeof(int32_t);
 	}
-	if((bot_self_counter+1)<(gHeap+HEAP_SIZE) && *(bot_self_counter+1)<0){
+	if((bot_self_counter+1)<(gHeap+HEAP_SIZE/2-64) && *(bot_self_counter+1)<0){
 		int bot_merge_size = abs(*(bot_self_counter+1));
 		old_size += bot_merge_size;
 		old_size += 2;
