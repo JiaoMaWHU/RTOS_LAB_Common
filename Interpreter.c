@@ -33,6 +33,13 @@ extern uint32_t NumCreated;
 extern uint32_t MaxISRDisableTime;
 extern uint32_t TotalISRDisableTime;
 extern int TelnetServerID;
+extern void victimLed(void);
+extern void malware2(void);
+extern void idleProcess(void);
+extern uint16_t mpuEnable;
+extern group groupArray[];
+extern int32_t* heapP;
+extern int32_t attack_pid;
 int getout = -1;
 
 static const ELFSymbol_t symtab[] = {
@@ -292,25 +299,32 @@ void ReadAllFiles(void) {
 // Input: none
 // Output: none
 void Output_Help(void){
-	Interpreter_OutString("==== Use , to separate, don't enter extra spaces in cmd ===="); OutCRLF(); OutCRLF();
-	Interpreter_OutString("lcd_t,[1],[2],[3]: output string [2] and value [3] to no.[1] line at the top side of the lcd"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("lcd_b,[1],[2],[3]: output string [2] and value [3] to no.[1] line at the bottom side of the lcd"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("==== Use , to separate, don't enter extra spaces in cmd ===="); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("lcd_t,[1],[2],[3]: output string [2] and value [3] to no.[1] line at the top side of the lcd"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("lcd_b,[1],[2],[3]: output string [2] and value [3] to no.[1] line at the bottom side of the lcd"); OutCRLF(); OutCRLF();
 	Interpreter_OutString("lcd_clr: clear the LCD"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("adc_init,[1]: initilize adc with channel number [1]"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("adc_get: output the value of adc"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("clr_ms: clear the time counter and start counting"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("get_ms: output the time counter"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("get_metrics: output the performance metrics, use it only in Lab2"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("get_systime: output the total and max system runtime during ISR disabled"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("reset_systime: reset the total and max system runtime"); OutCRLF(); OutCRLF();	
-	Interpreter_OutString("create_file, [1]: create a file with given name"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("read_file, [1]: read the content in an given file"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("write_file, [1], [2]: write to a file with name [1] with content [2]"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("delete_file, [1]: remove a given file"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("format_file : clear all files and data in the disk"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("show_files : print all file names in the directory"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("run_program, [1]: excute the input program name"); OutCRLF(); OutCRLF();
-	Interpreter_OutString("client_mode: enter client mode and connects to a server"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("adc_init,[1]: initilize adc with channel number [1]"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("adc_get: output the value of adc"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("clr_ms: clear the time counter and start counting"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("get_ms: output the time counter"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("get_metrics: output the performance metrics, use it only in Lab2"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("get_systime: output the total and max system runtime during ISR disabled"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("reset_systime: reset the total and max system runtime"); OutCRLF(); OutCRLF();	
+//	Interpreter_OutString("create_file, [1]: create a file with given name"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("read_file, [1]: read the content in an given file"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("write_file, [1], [2]: write to a file with name [1] with content [2]"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("delete_file, [1]: remove a given file"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("format_file : clear all files and data in the disk"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("show_files : print all file names in the directory"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("run_program, [1]: excute the input program name"); OutCRLF(); OutCRLF();
+//	Interpreter_OutString("client_mode: enter client mode and connects to a server"); OutCRLF(); OutCRLF();
+	Interpreter_OutString("enable_mpu: enable mpu protection"); OutCRLF(); OutCRLF();
+	Interpreter_OutString("disable_mpu: disable mpu protection"); OutCRLF(); OutCRLF();
+	Interpreter_OutString("show_group: show thread group configs"); OutCRLF(); OutCRLF();
+	Interpreter_OutString("add_group: add new thread group"); OutCRLF(); OutCRLF();
+	Interpreter_OutString("add_demo,[1]: add a demo victim program to a group"); OutCRLF(); OutCRLF();
+	Interpreter_OutString("add_process: add a idle process to Group1"); OutCRLF(); OutCRLF();
+	Interpreter_OutString("attack_pid,[1]: change the pid of all the processes in Group1"); OutCRLF(); OutCRLF();
 }
 
 //---------------------Call lcd function---------------------
@@ -417,8 +431,78 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 	  Interpreter_OutString("Enter client mode \r\n");
 		OS_AddThread(&Client, 128, 1);
 		OS_Kill();
-	}
-	else {
+	} else if (!strcmp("enable_mpu", cmd[0])) {
+	  mpuEnable = 1;
+		Interpreter_OutString("MPU enabled"); OutCRLF();
+	} else if (!strcmp("disable_mpu", cmd[0])) {
+	  mpuEnable = 0;
+		Interpreter_OutString("MPU disabled"); OutCRLF();
+	} else if (!strcmp("show_group", cmd[0])) {
+		Interpreter_OutString("Group 0, access read/write for all addresses"); OutCRLF();
+	  for(int i =1; i<3; i++){
+			if(groupArray[i].id==i){
+				Interpreter_OutString("Group ");
+				Interpreter_OutUDec(i);
+				Interpreter_OutString(", access read/write for address: ");
+				Interpreter_OutUDec(groupArray[i].start);
+				Interpreter_OutString(" to ");
+				Interpreter_OutUDec(groupArray[i].start+groupArray[i].range); OutCRLF();
+			}
+		}
+		Interpreter_OutString("At most 3 groups are supported"); OutCRLF();
+	} else if (!strcmp("add_group", cmd[0])) {
+	  for(int i =1; i<3; i++){
+			if(groupArray[i].id!=i){
+				groupArray[i].id = i;
+				groupArray[i].range = 512;
+				if(i==1){
+					groupArray[1].start = (int32_t)heapP;
+					groupArray[1].heapAddress = heapP;
+				}
+				if(i==2){
+					groupArray[2].start = (int32_t)(heapP + HEAP_SIZE/2);
+					groupArray[2].heapAddress = heapP + HEAP_SIZE/2;
+				}
+				Interpreter_OutString("Group added"); OutCRLF();
+				break;
+			}
+		}
+	} else if (!strcmp("add_demo", cmd[0])) {
+		uint16_t groupId;
+	  if(cmd[1]!=NULL){
+			groupId = (uint16_t)atoi(cmd[1]);
+			if(groupId==0){
+				Interpreter_OutString("Forbidden to Group 0"); OutCRLF();
+				return;
+			}
+			if(groupArray[groupId].start==0){
+				Interpreter_OutString("No such Group"); OutCRLF();
+				return;
+			}
+			OS_AddProcess(&victimLed,Heap_Group_Calloc(128,groupId),Heap_Group_Calloc(128,groupId),128,1, groupId);
+			Interpreter_OutString("Process added"); OutCRLF();
+		}else{
+			Interpreter_OutString("Missed group number"); OutCRLF();
+		}
+	} else if (!strcmp("add_process", cmd[0])){
+			if(groupArray[1].start==0){
+				Interpreter_OutString("No Group1"); OutCRLF();
+				return;
+			}
+			OS_AddProcess(&idleProcess,Heap_Group_Calloc(128,1),Heap_Group_Calloc(128,1),128,1, 1);
+			Interpreter_OutString("Idle Process added"); OutCRLF();
+	} else if(!strcmp("attack_pid", cmd[0])){
+			if(groupArray[2].start==0){
+				Interpreter_OutString("No such Group"); OutCRLF();
+				return;
+			}
+			if(cmd[1]==NULL){
+				Interpreter_OutString("No id specified"); OutCRLF();
+				return;
+			}
+			attack_pid = atoi(cmd[1]);
+			OS_AddProcess(&malware2,Heap_Group_Calloc(128,2),Heap_Group_Calloc(128,2),128,1, 2);
+	} else {
 		Interpreter_OutString("Invalid command"); OutCRLF();
 	}
 }

@@ -61,12 +61,10 @@ int32_t Heap_group_Init(void){
 	// heap 1
 	heap[0] = -(HEAP_SIZE/2-64-2);
 	heap[HEAP_SIZE/2-64-1] = -(HEAP_SIZE/2-64-2);
-	groupArray[1].heapAddress = heap;
 	
 	// heap 2
 	heap[HEAP_SIZE/2] = -(HEAP_SIZE/2-2);
 	heap[HEAP_SIZE-1] = -(HEAP_SIZE/2-2);
-	groupArray[2].heapAddress = heap + HEAP_SIZE/2;
 	
 	// init heap_stats
 	heap_stats.free = (HEAP_SIZE-4)*sizeof(int32_t);

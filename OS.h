@@ -135,6 +135,8 @@ void OS_SetInitialStack(int i);
 // move RunPtr to the next thread
 void OS_RunPtrScheduler(void);
 
+int OS_GetGroupId(void);
+
 //******** OS_AddProcess *************** 
 // add a process with foregound thread to the scheduler
 // Inputs: pointer to a void/void entry point
@@ -159,6 +161,9 @@ int OS_AddProcess(void(*entry)(void), void *text, void *data,
 // In Lab 3, you can ignore the stackSize fields
 int OS_AddThread(void(*task)(void), 
    uint32_t stackSize, uint32_t priority);
+
+int OS_AddGroupThread(void(*task)(void), uint32_t stackSize, 
+					uint32_t priority, uint16_t groupId);
 
 //******** OS_Id *************** 
 // returns the thread ID for the currently running thread

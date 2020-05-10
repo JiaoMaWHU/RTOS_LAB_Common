@@ -55,9 +55,7 @@ uint32_t threadIdMax = 0;
 char cmdInput[CMD1SIZE];
 char cmdInput2[CMD2SIZE];
 char espBuffer[1024];
-extern bool mpuEnable;
-
-
+uint16_t mpuEnable = 0;
 
 uint32_t OUTPUTMODE;
 
@@ -299,9 +297,12 @@ void SysTick_Init(unsigned long period){ // not set, specified in testmain1.... 
  */
 
 void mpuFaultHandler(void) {
-  ST7735_DrawString(0,3,"Unauthorize access", ST7735_YELLOW);
-	OS_Kill();
+  ST7735_DrawString(0,5,"Unauthorize access", ST7735_YELLOW);
+	printf("Unauthorize access detected\r\n");
+	printf("Killed\r\n");
+	printf("> ");
 	MPUIntUnregister();
+	OS_Kill();
 }
 
 void OS_Init(void){
@@ -327,14 +328,13 @@ void OS_Init(void){
 	MPUEnable(MPU_CONFIG_PRIV_DEFAULT);
 	MPUIntRegister(&mpuFaultHandler);
 	
-	// set group 
+	// init group 
 	groupArray[0].id = 0;
-	groupArray[1].id = 1;
-	groupArray[2].id = 2;
-	groupArray[1].start = (int32_t)heapP;
-	groupArray[1].range = 512;
-	groupArray[2].start = (int32_t)(heapP + HEAP_SIZE/2);
-	groupArray[2].range = 512;
+	groupArray[0].start = 0;
+	groupArray[1].id = 0;
+	groupArray[1].start = 0;
+	groupArray[2].id = 0;
+	groupArray[2].start = 0;
 }; 
 
 
@@ -520,6 +520,9 @@ void OS_MPUConfigure(uint32_t region, uint32_t groupId, uint32_t addr, uint16_t 
 	              MPU_RGN_ENABLE); 
 }
 
+int OS_GetGroupId(void){
+	return RunPt->groupPt->id;
+}
 
 // a wrapping function for os_addthread
 int OS_AddGroupThread(void(*task)(void), uint32_t stackSize, 
@@ -891,8 +894,11 @@ void OS_Kill(void){
 		if(RunPt->processPt->threadSize==0){
 			// kill the process
 			Heap_Group_Free(RunPt->processPt->textPt, RunPt->groupPt->id);
+			RunPt->processPt->textPt = NULL;
 			Heap_Group_Free(RunPt->processPt->dataPt, RunPt->groupPt->id);
+			RunPt->processPt->dataPt = NULL;
 			Heap_Group_Free(RunPt->processPt, RunPt->groupPt->id);
+			RunPt->processPt = NULL;
 		}
 	}
 	EndCritical(status);
