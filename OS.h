@@ -53,9 +53,8 @@ struct groupStruct{
 	int32_t start;
 	int32_t range;
 	int32_t* heapAddress;
-	int32_t* processId;
-	int32_t* value;
 	int32_t* sharedMem;
+	uint16_t sharedMemSize;
 };
 
 typedef struct tcb tcbType; // meaning replace "struct tcb" with tcbType

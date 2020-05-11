@@ -327,6 +327,7 @@ void Output_Help(void){
 	Interpreter_OutString("add_demo,[1]: add a demo victim program to a group"); OutCRLF(); OutCRLF();
 	Interpreter_OutString("add_process: add a idle process to Group1"); OutCRLF(); OutCRLF();
 	Interpreter_OutString("attack_pid,[1]: change the pid of all the processes in Group1"); OutCRLF(); OutCRLF();
+	Interpreter_OutString("init_sharemem,[1], [2]: initialize shared memory between two groups"); OutCRLF(); OutCRLF();		
 	Interpreter_OutString("add,[1], [2]: change the pid of all the processes in Group1"); OutCRLF(); OutCRLF();	
 }
 
@@ -505,6 +506,9 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 			}
 			attack_pid = atoi(cmd[1]);
 			OS_AddProcess(&malware2,Heap_Group_Calloc(128,2),Heap_Group_Calloc(128,2),128,1, 2);
+	} else if (!strcmp("init_sharemem", cmd[0])) {
+		  OS_SharedMem_Init(1,atoi(cmd[1]),atoi(cmd[2]));
+			printf("Init shared memory between %d and %d \r\n", atoi(cmd[1]),atoi(cmd[2])); OutCRLF();
 	} else if(!strcmp("add", cmd[0])){
 			memcpy(cmdInput, cmd[1], strlen(cmd[1]));
 			memcpy(cmdInput2, cmd[2], strlen(cmd[2]));
@@ -514,7 +518,6 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 			groupArray[2].id = 2;
 			groupArray[2].start = (int32_t)(heapP + HEAP_SIZE/2);
 			groupArray[2].heapAddress = heapP + HEAP_SIZE/2;			
-			OS_SharedMem_Init(1,1,2);
 		  
 			OS_AddProcess(&printer,Heap_Group_Calloc(128,1),Heap_Group_Calloc(128,1),128,1, 1);
 			OS_AddProcess(&calculator,Heap_Group_Calloc(128,2),Heap_Group_Calloc(128,2),128,1, 2);

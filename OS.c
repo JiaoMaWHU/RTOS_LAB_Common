@@ -72,6 +72,8 @@ Sema4Type Ack; // semaphore for mailbox
 Sema4Type CurrentFifoSize; // semaphore for mutex in OS_FIFO
 Sema4Type SharedMemSent;
 Sema4Type SharedMemRec;
+Sema4Type SharedMemMutex;
+
 
 uint32_t FifoBuffer[FifoBufferSize];
 uint32_t inFifoId;
@@ -336,18 +338,15 @@ void OS_Init(void){
 	// init group 
 	groupArray[0].id = 0;
 	groupArray[0].start = 0;
-	groupArray[0].processId = NULL;
-	groupArray[0].value = NULL;
+	groupArray[0].sharedMem = NULL;
 	
 	groupArray[1].id = 0;
 	groupArray[1].start = 0;
-	groupArray[1].processId = NULL;
-	groupArray[1].value = NULL;	
+	groupArray[1].sharedMem = NULL;
 	
 	groupArray[2].id = 0;
-	groupArray[2].start = 0;
-	groupArray[2].processId = NULL;
-	groupArray[2].value = NULL;		
+	groupArray[2].start = 0;	
+	groupArray[2].sharedMem = NULL;
 }; 
 
 
@@ -541,14 +540,6 @@ int OS_GetGroupId(void){
 int OS_AddGroupThread(void(*task)(void), uint32_t stackSize, 
 					uint32_t priority, uint16_t groupId){
 	addProcessGroupId = groupId;							
-  if (groupArray[groupId].processId == NULL) {
-	  groupArray[groupId].value = sharedMemPtr;
-    sharedMemPtr -= 1;		
-	}
-	if (groupArray[groupId].processId == NULL) {
-	  groupArray[groupId].value = sharedMemPtr;
-		sharedMemPtr -= 1;
-	}
 	return OS_AddThread(task, stackSize, priority);
 }
 					
@@ -947,29 +938,49 @@ void OS_Suspend(void){
 };
   
 void OS_SharedMem_Init(uint32_t size, uint32_t groupID1, uint32_t groupID2) {
-	OS_InitSemaphore(&SharedMemRec, 0);
-	OS_InitSemaphore(&SharedMemSent, 0);
+	if (groupArray[groupID1].sharedMem != NULL || groupArray[groupID1].sharedMem != NULL) return;
+	*sharedMemPtr = (int)'*';
 	groupArray[groupID1].sharedMem = sharedMemPtr;
+	groupArray[groupID1].sharedMemSize = size;		
 	groupArray[groupID2].sharedMem = sharedMemPtr;
-	sharedMemPtr--;
+	groupArray[groupID2].sharedMemSize = size;
+	sharedMemPtr -= size;
 }
 
 void OS_SharedMem_Put(int value) {
 	int id = OS_GetGroupId();
-	*(groupArray[id].sharedMem) = value;
+	if (groupArray[id].sharedMem == NULL) {
+	  printf("no shared memory established in %d \r\n", id);
+		OS_Kill();
+	}
+	int32_t* mPtr = groupArray[id].sharedMem;
+	while (*(mPtr) != (int)'*') {
+		OS_Sleep(10);
+	}	 	
+	for (int i = 0; i < groupArray[id].sharedMemSize; i++) { 
+		*(mPtr-i) = value;	  
+	}
   ST7735_Message(0,0,"Group ",id);
 	ST7735_Message(0,1,"shared addr:",(int) groupArray[id].sharedMem);
-	OS_Signal(&SharedMemSent);
-	OS_Wait(&SharedMemRec);
 }
 
 int OS_SharedMem_Get(void) {
 	int id = OS_GetGroupId();	
-	OS_Wait(&SharedMemSent);	
-	int value = *(groupArray[id].sharedMem);
+	if (groupArray[id].sharedMem == NULL) {
+	  printf("no shared memory established in %d \r\n", id);
+		OS_Kill();
+	}	
+	int value = 0;
+	int32_t* mPtr = groupArray[id].sharedMem;
+	while (*(mPtr) == (int)'*') {
+		OS_Sleep(10);
+	}			
+	for (int i = 0; i < groupArray[id].sharedMemSize; i++) {	
+		value = *(mPtr-i);	    
+	}
+	*(mPtr) = (int)'*';	
   ST7735_Message(0,2,"Group ",id);
 	ST7735_Message(0,3,"shared addr:",(int) groupArray[id].sharedMem);	
-	OS_Signal(&SharedMemRec);
 	return value;
 }
 
