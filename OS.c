@@ -904,7 +904,7 @@ void OS_Kill(void){
 	if(RunPt->processPt!=NULL){
 		// thread belongs to a process
 		RunPt->processPt->threadSize--;
-		if(RunPt->processPt->threadSize==0){
+		if(RunPt->processPt->threadSize<=0){
 			// kill the process
 			Heap_Group_Free(RunPt->processPt->textPt, RunPt->groupPt->id);
 			RunPt->processPt->textPt = NULL;
