@@ -35,6 +35,7 @@
 static int32_t heap[HEAP_SIZE];
 heap_stats_t heap_stats;
 int32_t* heapP = heap;
+int32_t* heapBP = &heap[HEAP_SIZE];
 extern group groupArray[];
 
 //******** Heap_Init *************** 

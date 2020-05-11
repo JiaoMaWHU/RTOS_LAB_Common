@@ -53,6 +53,9 @@ struct groupStruct{
 	int32_t start;
 	int32_t range;
 	int32_t* heapAddress;
+	int32_t* processId;
+	int32_t* value;
+	int32_t* sharedMem;
 };
 
 typedef struct tcb tcbType; // meaning replace "struct tcb" with tcbType
@@ -251,6 +254,12 @@ void OS_Suspend(void);
 unsigned long OS_LockScheduler(void);
 // resume foreground thread switching
 void OS_UnLockScheduler(unsigned long previous);
+ 
+void OS_SharedMem_Init(uint32_t size, uint32_t groupID1, uint32_t groupID2);
+
+void OS_SharedMem_Put(int value);
+
+int OS_SharedMem_Get(void); 
  
 // ******** OS_Fifo_Init ************
 // Initialize the Fifo to be empty

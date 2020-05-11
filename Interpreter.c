@@ -36,6 +36,8 @@ extern int TelnetServerID;
 extern void victimLed(void);
 extern void malware2(void);
 extern void idleProcess(void);
+extern void calculator(void);
+extern void printer(void);
 extern uint16_t mpuEnable;
 extern group groupArray[];
 extern int32_t* heapP;
@@ -325,6 +327,7 @@ void Output_Help(void){
 	Interpreter_OutString("add_demo,[1]: add a demo victim program to a group"); OutCRLF(); OutCRLF();
 	Interpreter_OutString("add_process: add a idle process to Group1"); OutCRLF(); OutCRLF();
 	Interpreter_OutString("attack_pid,[1]: change the pid of all the processes in Group1"); OutCRLF(); OutCRLF();
+	Interpreter_OutString("add,[1], [2]: change the pid of all the processes in Group1"); OutCRLF(); OutCRLF();	
 }
 
 //---------------------Call lcd function---------------------
@@ -502,6 +505,20 @@ void CMD_Parser(char *cmd_buffer_, uint16_t length){
 			}
 			attack_pid = atoi(cmd[1]);
 			OS_AddProcess(&malware2,Heap_Group_Calloc(128,2),Heap_Group_Calloc(128,2),128,1, 2);
+	} else if(!strcmp("add", cmd[0])){
+			memcpy(cmdInput, cmd[1], strlen(cmd[1]));
+			memcpy(cmdInput2, cmd[2], strlen(cmd[2]));
+			groupArray[1].id = 1;
+			groupArray[1].start = (int32_t)heapP;
+			groupArray[1].heapAddress = heapP;
+			groupArray[2].id = 2;
+			groupArray[2].start = (int32_t)(heapP + HEAP_SIZE/2);
+			groupArray[2].heapAddress = heapP + HEAP_SIZE/2;			
+			OS_SharedMem_Init(1,1,2);
+		  
+			OS_AddProcess(&printer,Heap_Group_Calloc(128,1),Heap_Group_Calloc(128,1),128,1, 1);
+			OS_AddProcess(&calculator,Heap_Group_Calloc(128,2),Heap_Group_Calloc(128,2),128,1, 2);
+		  OS_Suspend();
 	} else {
 		Interpreter_OutString("Invalid command"); OutCRLF();
 	}

@@ -70,6 +70,9 @@ Sema4Type Send; // semaphore for mailbox
 Sema4Type Ack; // semaphore for mailbox
 
 Sema4Type CurrentFifoSize; // semaphore for mutex in OS_FIFO
+Sema4Type SharedMemSent;
+Sema4Type SharedMemRec;
+
 uint32_t FifoBuffer[FifoBufferSize];
 uint32_t inFifoId;
 uint32_t outFifoId;
@@ -105,6 +108,8 @@ pcbType* addThreadProcessPt = NULL;
 uint32_t globalPid = 0;
 
 extern int32_t* heapP;
+extern int32_t* heapBP;
+int32_t* sharedMemPtr; 
 group groupArray[3]; 
 uint16_t addProcessGroupId = 0;
 
@@ -327,14 +332,22 @@ void OS_Init(void){
 	IntEnable(FAULT_MPU);
 	MPUEnable(MPU_CONFIG_PRIV_DEFAULT);
 	MPUIntRegister(&mpuFaultHandler);
-	
+	sharedMemPtr = heapBP;
 	// init group 
 	groupArray[0].id = 0;
 	groupArray[0].start = 0;
+	groupArray[0].processId = NULL;
+	groupArray[0].value = NULL;
+	
 	groupArray[1].id = 0;
 	groupArray[1].start = 0;
+	groupArray[1].processId = NULL;
+	groupArray[1].value = NULL;	
+	
 	groupArray[2].id = 0;
 	groupArray[2].start = 0;
+	groupArray[2].processId = NULL;
+	groupArray[2].value = NULL;		
 }; 
 
 
@@ -527,9 +540,18 @@ int OS_GetGroupId(void){
 // a wrapping function for os_addthread
 int OS_AddGroupThread(void(*task)(void), uint32_t stackSize, 
 					uint32_t priority, uint16_t groupId){
-	addProcessGroupId = groupId;
+	addProcessGroupId = groupId;							
+  if (groupArray[groupId].processId == NULL) {
+	  groupArray[groupId].value = sharedMemPtr;
+    sharedMemPtr -= 1;		
+	}
+	if (groupArray[groupId].processId == NULL) {
+	  groupArray[groupId].value = sharedMemPtr;
+		sharedMemPtr -= 1;
+	}
 	return OS_AddThread(task, stackSize, priority);
 }
+					
 
 //******** OS_AddThread *************** 
 // add a foregound thread to the scheduler
@@ -924,6 +946,33 @@ void OS_Suspend(void){
   ContextSwitch();
 };
   
+void OS_SharedMem_Init(uint32_t size, uint32_t groupID1, uint32_t groupID2) {
+	OS_InitSemaphore(&SharedMemRec, 0);
+	OS_InitSemaphore(&SharedMemSent, 0);
+	groupArray[groupID1].sharedMem = sharedMemPtr;
+	groupArray[groupID2].sharedMem = sharedMemPtr;
+	sharedMemPtr--;
+}
+
+void OS_SharedMem_Put(int value) {
+	int id = OS_GetGroupId();
+	*(groupArray[id].sharedMem) = value;
+  ST7735_Message(0,0,"Group ",id);
+	ST7735_Message(0,1,"shared addr:",(int) groupArray[id].sharedMem);
+	OS_Signal(&SharedMemSent);
+	OS_Wait(&SharedMemRec);
+}
+
+int OS_SharedMem_Get(void) {
+	int id = OS_GetGroupId();	
+	OS_Wait(&SharedMemSent);	
+	int value = *(groupArray[id].sharedMem);
+  ST7735_Message(0,2,"Group ",id);
+	ST7735_Message(0,3,"shared addr:",(int) groupArray[id].sharedMem);	
+	OS_Signal(&SharedMemRec);
+	return value;
+}
+
 // ******** OS_Fifo_Init ************
 // Initialize the Fifo to be empty
 // Inputs: size
